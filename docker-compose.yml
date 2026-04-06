@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # Redis 服务 - 用于 Celery 任务队列和缓存
+  redis:
+    image: redis:7-alpine
+    container_name: defect-detection-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # PostgreSQL 服务 - 生产环境数据库（可选）
+  # 默认使用 SQLite，取消注释以下配置以使用 PostgreSQL
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: defect-detection-postgres
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     POSTGRES_USER: defect_user
+  #     POSTGRES_PASSWORD: defect_password
+  #     POSTGRES_DB: defect_detection
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U defect_user -d defect_detection"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 3
+
+  # Celery Worker 服务
+  # 取消注释以下配置以使用 Docker 运行 Celery Worker
+  # celery-worker:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: defect-detection-celery
+  #   restart: unless-stopped
+  #   command: celery -A celery_worker worker --loglevel=info --concurrency=2
+  #   volumes:
+  #     - ./backend:/app
+  #     - ./models:/app/models
+  #     - ./uploads:/app/uploads
+  #   environment:
+  #     - CELERY_BROKER_URL=redis://redis:6379/1
+  #     - CELERY_RESULT_BACKEND=redis://redis:6379/2
+  #     - DATABASE_URL=sqlite+aiosqlite:///./app.db
+  #   depends_on:
+  #     - redis
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+
+volumes:
+  redis_data:
+  # postgres_data:
+
+networks:
+  default:
+    name: defect-detection-network
