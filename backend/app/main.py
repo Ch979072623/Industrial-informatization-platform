@@ -31,7 +31,8 @@ def create_application() -> FastAPI:
         version=settings.app_version,
         description="工业缺陷检测平台 API",
         debug=settings.debug,
-        lifespan=lifespan
+        lifespan=lifespan,
+        redirect_slashes=False  # 禁用斜杠重定向，避免 Authorization header 丢失
     )
     
     # 配置 CORS

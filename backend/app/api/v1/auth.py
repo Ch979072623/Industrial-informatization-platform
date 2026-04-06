@@ -57,7 +57,10 @@ async def login(
 
 
 @router.post("/refresh", response_model=APIResponse[TokenRefreshResponse])
-async def refresh_token(refresh_data: TokenRefresh):
+async def refresh_token(
+    refresh_data: TokenRefresh,
+    db: AsyncSession = Depends(get_db)
+):
     """
     刷新访问令牌
     
@@ -65,7 +68,7 @@ async def refresh_token(refresh_data: TokenRefresh):
     - 刷新令牌只能使用一次（可选实现）
     """
     try:
-        result = await AuthService.refresh_access_token(refresh_data.refresh_token)
+        result = await AuthService.refresh_access_token(db, refresh_data.refresh_token)
         return APIResponse.success_response(
             data=TokenRefreshResponse(**result),
             message="令牌刷新成功"

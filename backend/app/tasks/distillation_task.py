@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
-distill_model(
+def distill_model(
     self,
     teacher_model_id: str,
     student_model_id: str,

@@ -12,6 +12,9 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
 // 管理员页面
 const UserManagementPage = lazy(() => import('@/pages/admin/UserManagementPage'));
+const DatasetListPage = lazy(() => import('@/pages/admin/DatasetListPage'));
+const DatasetUploadPage = lazy(() => import('@/pages/admin/DatasetUploadPage'));
+const DatasetDetailPage = lazy(() => import('@/pages/admin/DatasetDetailPage'));
 
 // 加载中组件
 const PageLoading = () => (
@@ -108,6 +111,36 @@ const routes: RouteObject[] = [
               <ProtectedRoute requireAdmin>
                 <Suspense fallback={<PageLoading />}>
                   <UserManagementPage />
+                </Suspense>
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'datasets',
+            element: (
+              <ProtectedRoute requireAdmin>
+                <Suspense fallback={<PageLoading />}>
+                  <DatasetListPage />
+                </Suspense>
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'datasets/upload',
+            element: (
+              <ProtectedRoute requireAdmin>
+                <Suspense fallback={<PageLoading />}>
+                  <DatasetUploadPage />
+                </Suspense>
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'datasets/:id',
+            element: (
+              <ProtectedRoute requireAdmin>
+                <Suspense fallback={<PageLoading />}>
+                  <DatasetDetailPage />
                 </Suspense>
               </ProtectedRoute>
             ),

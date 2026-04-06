@@ -29,12 +29,7 @@ const navItems: NavItem[] = [
     href: '/dashboard',
     icon: <LayoutDashboard className="h-5 w-5" />,
   },
-  {
-    title: '数据集管理',
-    href: '/datasets',
-    icon: <Database className="h-5 w-5" />,
-    roles: ['admin', 'user'],
-  },
+  // 管理员专属的数据集管理在 admin 路由下
   {
     title: '数据增强',
     href: '/augmentation',
@@ -93,6 +88,12 @@ const navItems: NavItem[] = [
     title: '用户管理',
     href: '/admin/users',
     icon: <Users className="h-5 w-5" />,
+    roles: ['admin'],
+  },
+  {
+    title: '数据集管理',
+    href: '/admin/datasets',
+    icon: <Database className="h-5 w-5" />,
     roles: ['admin'],
   },
 ];

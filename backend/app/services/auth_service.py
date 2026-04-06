@@ -148,12 +148,14 @@ class AuthService:
     
     @staticmethod
     async def refresh_access_token(
+        db: AsyncSession,
         refresh_token: str
     ) -> dict:
         """
         刷新访问令牌
         
         Args:
+            db: 数据库会话
             refresh_token: 刷新令牌
             
         Returns:
@@ -174,9 +176,23 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # 创建新的访问令牌（只包含用户ID）
+        # 从数据库获取用户信息
+        user = await AuthService.get_user_by_id(db, token_data.user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="用户不存在",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # 创建新的访问令牌（包含完整用户信息）
         new_access_token = create_access_token(
-            data={"sub": token_data.user_id}
+            data={
+                "sub": user.id,
+                "username": user.username,
+                "role": user.role,
+                "production_line_id": user.production_line_id
+            }
         )
         
         return {

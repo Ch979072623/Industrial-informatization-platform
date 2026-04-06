@@ -16,6 +16,7 @@ celery_app = Celery(
         "app.tasks.testing_task",
         "app.tasks.pruning_task",
         "app.tasks.distillation_task",
+        "app.tasks.dataset_task",
     ]
 )
 

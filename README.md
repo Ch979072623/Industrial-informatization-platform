@@ -59,8 +59,7 @@ defect-detection-platform/
 ### 1. 克隆项目
 
 ```bash
-git clone <repository-url>
-cd defect-detection-platform
+git clone https://github.com/Ch979072623/Industrial-informatization-platform.git
 ```
 
 ### 2. 配置环境变量
@@ -222,7 +221,7 @@ docker-compose down
 
 ## 许可证
 
-MIT License
+None
 
 ## 贡献
 
@@ -231,5 +230,5 @@ MIT License
 ## 联系方式
 
 如有问题，请通过以下方式联系：
-- 邮箱: support@example.com
-- 项目 Issues: https://github.com/example/defect-detection-platform/issues
+- 邮箱: 979072623@qq.com
+- 项目 Issues: https://github.com/Ch979072623/Industrial-informatization-platform/issues

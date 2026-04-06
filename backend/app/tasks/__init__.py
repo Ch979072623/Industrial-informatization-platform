@@ -8,4 +8,5 @@ Celery 任务模块
 - testing_task: 模型测试
 - pruning_task: 模型剪枝
 - distillation_task: 知识蒸馏
+- dataset_task: 数据集处理
 """
