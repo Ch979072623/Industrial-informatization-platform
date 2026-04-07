@@ -188,8 +188,10 @@ export const datasetApi = {
     api.post<ApiResponse>(`/datasets/${id}/labels/yaml`, { yaml_content: yamlContent }),
 
   // 获取数据集卡片信息（包含预览和统计）
-  getDatasetCardInfo: (id: string) =>
-    api.get<ApiResponse>(`/datasets/${id}/card-info`),
+  getDatasetCardInfo: (id: string, previewCount?: number) =>
+    api.get<ApiResponse>(`/datasets/${id}/card-info`, { 
+      params: previewCount ? { preview_count: previewCount } : undefined 
+    }),
 
   // 导出数据集
   exportDataset: (id: string, format: string = 'original', splits?: string[]) =>
@@ -197,6 +199,91 @@ export const datasetApi = {
       params: { format, splits: splits?.join(',') },
       responseType: 'blob',
     }),
+};
+
+// 数据增强 API
+import type {
+  AugmentationOperation,
+  AugmentationOperationDefinition,
+  AvailableOperationsResponse,
+  AugmentationTemplate,
+  CreateTemplateRequest,
+  UpdateTemplateRequest,
+  AugmentationJob,
+  CreateJobRequest,
+  UpdateJobRequest,
+  JobListQuery,
+  JobControlRequest,
+  JobControlResponse,
+  JobProgressResponse,
+  PreviewRequest,
+  PreviewResponse,
+  CustomScript,
+  UploadScriptRequest,
+  PipelineValidationResponse,
+} from '@/types/augmentation';
+
+export const augmentationApi = {
+  // 获取可用操作列表
+  getOperations: () =>
+    api.get<ApiResponse<AvailableOperationsResponse>>('/augmentation/operations'),
+
+  // 模板管理
+  getTemplates: (params?: { page?: number; page_size?: number }) =>
+    api.get<ApiResponse<{ items: AugmentationTemplate[]; total: number }>>('/augmentation/templates', { params }),
+
+  createTemplate: (data: CreateTemplateRequest) =>
+    api.post<ApiResponse<AugmentationTemplate>>('/augmentation/templates', data),
+
+  updateTemplate: (id: string, data: UpdateTemplateRequest) =>
+    api.put<ApiResponse<AugmentationTemplate>>(`/augmentation/templates/${id}`, data),
+
+  deleteTemplate: (id: string) =>
+    api.delete<ApiResponse>(`/augmentation/templates/${id}`),
+
+  // 任务管理
+  getJobs: (params?: JobListQuery) =>
+    api.get<ApiResponse<{ items: AugmentationJob[]; total: number }>>('/augmentation/jobs', { params }),
+
+  getJob: (id: string) =>
+    api.get<ApiResponse<AugmentationJob>>(`/augmentation/jobs/${id}`),
+
+  createJob: (data: CreateJobRequest) =>
+    api.post<ApiResponse<AugmentationJob>>('/augmentation/jobs', data),
+
+  controlJob: (id: string, data: JobControlRequest) =>
+    api.post<ApiResponse<JobControlResponse>>(`/augmentation/jobs/${id}/control`, data),
+
+  getJobProgress: (id: string) =>
+    api.get<ApiResponse<JobProgressResponse>>(`/augmentation/jobs/${id}/progress`),
+
+  // 预览
+  createPreview: (data: PreviewRequest) =>
+    api.post<ApiResponse<PreviewResponse>>('/augmentation/preview', data),
+
+  getPreviewImage: (previewId: string) =>
+    api.get<Blob>(`/augmentation/preview/${previewId}/image`, { responseType: 'blob' }),
+
+  // 自定义脚本
+  getCustomScripts: (params?: { page?: number; page_size?: number }) =>
+    api.get<ApiResponse<{ items: CustomScript[]; total: number }>>('/augmentation/custom-scripts', { params }),
+
+  uploadScript: (data: UploadScriptRequest) => {
+    const formData = new FormData();
+    formData.append('name', data.name);
+    if (data.description) formData.append('description', data.description);
+    formData.append('file', data.file);
+    return api.post<ApiResponse<CustomScript>>('/augmentation/custom-scripts', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  deleteScript: (id: string) =>
+    api.delete<ApiResponse>(`/augmentation/custom-scripts/${id}`),
+
+  // 配置验证
+  validatePipeline: (pipelineConfig: AugmentationOperation[]) =>
+    api.post<ApiResponse<PipelineValidationResponse>>('/augmentation/validate', pipelineConfig),
 };
 
 export default api;

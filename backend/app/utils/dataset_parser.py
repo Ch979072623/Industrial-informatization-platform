@@ -221,14 +221,16 @@ class BaseParser:
     所有具体解析器都应继承此类并实现parse方法。
     """
 
-    def __init__(self, dataset_path: str):
+    def __init__(self, dataset_path: str, max_images: Optional[int] = None):
         """
         初始化解析器
         
         Args:
             dataset_path: 数据集根目录路径
+            max_images: 最大解析图像数量（None表示不限制）
         """
         self.dataset_path = Path(dataset_path)
+        self.max_images = max_images
         self.errors: List[str] = []
 
     def parse(self) -> DatasetInfo:
@@ -304,15 +306,16 @@ class YOLOParser(BaseParser):
     格式: <class_id> <x_center> <y_center> <width> <height>（均为归一化值）
     """
 
-    def __init__(self, dataset_path: str, class_names: Optional[List[str]] = None):
+    def __init__(self, dataset_path: str, class_names: Optional[List[str]] = None, max_images: Optional[int] = None):
         """
         初始化YOLO解析器
         
         Args:
             dataset_path: 数据集根目录路径
             class_names: 类别名称列表（可选，会从data.yaml读取）
+            max_images: 最大解析图像数量（None表示不限制）
         """
-        super().__init__(dataset_path)
+        super().__init__(dataset_path, max_images)
         self.class_names = class_names or []
 
     def parse(self) -> DatasetInfo:
@@ -352,10 +355,16 @@ class YOLOParser(BaseParser):
 
         # 检测是否是扁平结构（images_dir == labels_dir 表示是数据集根目录）
         is_flat_structure = images_dir == labels_dir
-        logger.info(f"YOLOParser 结构检测: images_dir={images_dir}, is_flat={is_flat_structure}")
+        logger.info(f"YOLOParser 结构检测: images_dir={images_dir}, is_flat={is_flat_structure}, max_images={self.max_images}")
 
         # 遍历所有划分（train/val/test）
+        total_parsed = 0
         for split in ["train", "val", "test"]:
+            # 如果已达到最大解析数量，停止解析
+            if self.max_images is not None and total_parsed >= self.max_images:
+                logger.info(f"已达到最大解析数量 {self.max_images}，停止解析")
+                break
+            
             if is_flat_structure:
                 # 扁平结构: dataset_name/train/images/, dataset_name/train/labels/
                 split_images_dir = images_dir / split / "images"
@@ -382,9 +391,15 @@ class YOLOParser(BaseParser):
             logger.info(f"Split {split}: 找到 {len(image_files)} 个图像")
 
             for img_file in image_files:
+                # 如果已达到最大解析数量，停止解析
+                if self.max_images is not None and total_parsed >= self.max_images:
+                    logger.info(f"已达到最大解析数量 {self.max_images}，停止解析")
+                    break
+                
                 try:
                     dataset_img = self._parse_image(img_file, split_labels_dir, split)
                     images.append(dataset_img)
+                    total_parsed += 1
                 except Exception as e:
                     logger.warning(f"解析图像失败 {img_file}: {e}")
                     self.errors.append(f"解析图像失败 {img_file}: {e}")
@@ -608,15 +623,16 @@ class COCOParser(BaseParser):
     JSON结构包含: info, images, annotations, categories
     """
 
-    def __init__(self, dataset_path: str, annotation_file: Optional[str] = None):
+    def __init__(self, dataset_path: str, annotation_file: Optional[str] = None, max_images: Optional[int] = None):
         """
         初始化COCO解析器
         
         Args:
             dataset_path: 数据集根目录路径
             annotation_file: 标注文件路径（可选，默认查找annotations目录）
+            max_images: 最大解析图像数量（None表示不限制）
         """
-        super().__init__(dataset_path)
+        super().__init__(dataset_path, max_images)
         self.annotation_file = annotation_file
 
     def parse(self) -> DatasetInfo:
@@ -643,6 +659,11 @@ class COCOParser(BaseParser):
         splits: Dict[str, int] = {}
 
         for anno_file, split in annotation_files:
+            # 如果已达到最大解析数量，停止解析
+            if self.max_images is not None and len(all_images) >= self.max_images:
+                logger.info(f"已达到最大解析数量 {self.max_images}，停止解析")
+                break
+            
             try:
                 images, class_names = self._parse_annotation_file(anno_file, split)
                 all_images.extend(images)
@@ -719,9 +740,17 @@ class COCOParser(BaseParser):
         categories = {cat['id']: cat['name'] for cat in data.get('categories', [])}
         class_names = [categories[i] for i in sorted(categories.keys())]
 
-        # 解析图像
+        # 解析图像（限制数量）
         image_dict: Dict[str, DatasetImage] = {}
-        for img_info in data.get('images', []):
+        all_images = data.get('images', [])
+        
+        # 如果设置了最大数量，截断图像列表
+        if self.max_images is not None:
+            # 计算该split最多可以解析多少张图片
+            remaining = self.max_images - sum(1 for img in image_dict.values())
+            all_images = all_images[:remaining]
+        
+        for img_info in all_images:
             img_id = str(img_info['id'])
             image_dict[img_id] = DatasetImage(
                 id=img_id,
@@ -774,15 +803,16 @@ class VOCParser(BaseParser):
     XML结构包含: filename, size, object[bndbox, name]
     """
 
-    def __init__(self, dataset_path: str, class_names: Optional[List[str]] = None):
+    def __init__(self, dataset_path: str, class_names: Optional[List[str]] = None, max_images: Optional[int] = None):
         """
         初始化VOC解析器
         
         Args:
             dataset_path: 数据集根目录路径
             class_names: 类别名称列表（可选）
+            max_images: 最大解析图像数量（None表示不限制）
         """
-        super().__init__(dataset_path)
+        super().__init__(dataset_path, max_images)
         self.class_names = class_names or []
         self.class_to_id: Dict[str, int] = {}
 
@@ -817,8 +847,21 @@ class VOCParser(BaseParser):
         images: List[DatasetImage] = []
         splits: Dict[str, int] = {"train": 0, "val": 0, "test": 0}
 
-        # 解析所有XML文件（支持子目录结构如 Annotations/train/*.xml）
-        for xml_file in annotations_dir.rglob("*.xml"):
+        # 获取所有XML文件
+        all_xml_files = list(annotations_dir.rglob("*.xml"))
+        
+        # 如果设置了最大数量，截断列表
+        if self.max_images is not None:
+            all_xml_files = all_xml_files[:self.max_images]
+            logger.info(f"VOC解析限制: 只解析前 {self.max_images} 张图像")
+
+        # 解析XML文件
+        for xml_file in all_xml_files:
+            # 如果已达到最大解析数量，停止解析
+            if self.max_images is not None and len(images) >= self.max_images:
+                logger.info(f"已达到最大解析数量 {self.max_images}，停止解析")
+                break
+            
             try:
                 image_name = xml_file.stem
                 split = image_splits.get(image_name, "train")
@@ -1961,15 +2004,23 @@ class DatasetAnalyzer:
         self._parser = None
         self._dataset_info = None
     
-    def _get_parser(self) -> BaseParser:
-        """获取对应格式的解析器"""
-        if self._parser is None:
+    def _get_parser(self, max_images: Optional[int] = None) -> BaseParser:
+        """
+        获取对应格式的解析器
+        
+        Args:
+            max_images: 最大解析图像数量（None表示不限制）
+            
+        Returns:
+            BaseParser: 对应格式的解析器实例
+        """
+        if self._parser is None or getattr(self._parser, 'max_images', None) != max_images:
             if self.format == "yolo":
-                self._parser = YOLOParser(str(self.dataset_path))
+                self._parser = YOLOParser(str(self.dataset_path), max_images=max_images)
             elif self.format == "coco":
-                self._parser = COCOParser(str(self.dataset_path))
+                self._parser = COCOParser(str(self.dataset_path), max_images=max_images)
             elif self.format == "voc":
-                self._parser = VOCParser(str(self.dataset_path))
+                self._parser = VOCParser(str(self.dataset_path), max_images=max_images)
             else:
                 raise InvalidFormatError(f"不支持的格式: {self.format}")
         return self._parser
@@ -2118,6 +2169,8 @@ class DatasetAnalyzer:
         """
         获取预览图片列表
         
+        优化：只解析需要数量的图片，而不是整个数据集
+        
         Args:
             count: 返回的图片数量
             
@@ -2136,10 +2189,16 @@ class DatasetAnalyzer:
                 ...
             ]
         """
-        if self._dataset_info is None:
+        # 如果已有缓存的数据集信息且数量足够，直接使用
+        if self._dataset_info is not None and len(self._dataset_info.images) >= count:
+            logger.debug(f"使用缓存的数据集信息，共 {len(self._dataset_info.images)} 张图像")
+        else:
+            # 否则，使用限制数量的解析器重新解析
             try:
-                parser = self._get_parser()
+                logger.info(f"开始解析数据集获取预览图片，限制数量: {count}")
+                parser = self._get_parser(max_images=count)
                 self._dataset_info = parser.parse()
+                logger.info(f"解析完成，获取 {len(self._dataset_info.images)} 张图像")
             except Exception as e:
                 logger.error(f"解析数据集失败: {e}")
                 return []

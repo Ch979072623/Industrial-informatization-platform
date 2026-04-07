@@ -32,9 +32,9 @@ const navItems: NavItem[] = [
   // 管理员专属的数据集管理在 admin 路由下
   {
     title: '数据增强',
-    href: '/augmentation',
+    href: '/admin/augmentation',
     icon: <PlusCircle className="h-5 w-5" />,
-    roles: ['admin', 'user'],
+    roles: ['admin'],
   },
   {
     title: '数据生成',

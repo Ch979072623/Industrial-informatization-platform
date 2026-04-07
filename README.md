@@ -134,6 +134,8 @@ cd backend
 
 # 确保 Redis 已启动
 celery -A celery_worker worker --loglevel=info
+
+# celery -A celery_worker worker --pool=solo --loglevel=info
 ```
 
 ## 数据库迁移

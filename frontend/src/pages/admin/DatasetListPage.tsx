@@ -10,7 +10,6 @@ import {
   Plus, 
   Search, 
   Trash2, 
-  Database, 
   Image as ImageIcon, 
   Tag,
   Calendar,
@@ -18,7 +17,6 @@ import {
   FileArchive,
   Loader2,
   Edit3,
-  Eye,
   BarChart3,
   Upload,
   X,
@@ -60,13 +58,14 @@ import { cn } from '@/utils/cn';
 // 数据集卡片组件
 interface DatasetCardProps {
   dataset: DatasetCardInfo;
+  isLoading?: boolean;
   onClick: () => void;
   onDelete: (e: React.MouseEvent) => void;
   onEditLabels: (e: React.MouseEvent) => void;
   onExport: (e: React.MouseEvent) => void;
 }
 
-const DatasetCard = ({ dataset, onClick, onDelete, onEditLabels, onExport }: DatasetCardProps) => {
+const DatasetCard = ({ dataset, isLoading = false, onClick, onDelete, onEditLabels, onExport }: DatasetCardProps) => {
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('zh-CN', {
       year: 'numeric',
@@ -128,6 +127,12 @@ const DatasetCard = ({ dataset, onClick, onDelete, onEditLabels, onExport }: Dat
                 </div>
               ))
             }
+          </div>
+        ) : isLoading ? (
+          // 加载中状态
+          <div className="aspect-video bg-muted flex flex-col items-center justify-center">
+            <Loader2 className="h-8 w-8 text-muted-foreground animate-spin mb-2" />
+            <span className="text-xs text-muted-foreground">加载预览中...</span>
           </div>
         ) : (
           <div className="aspect-video bg-muted flex items-center justify-center">
@@ -455,6 +460,9 @@ export function DatasetListPage() {
   const [datasetToEdit, setDatasetToEdit] = useState<DatasetCardInfo | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
+  // 记录每个数据集ID的加载状态
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+
   const fetchDatasets = useCallback(async () => {
     try {
       setLoading(true);
@@ -463,35 +471,64 @@ export function DatasetListPage() {
         page: 1,
         page_size: 100,
         keyword: searchTerm || undefined,
-        format: formatFilter === 'all' ? undefined : formatFilter,
       };
       
       // 先获取数据集列表
       const response = await datasetApi.getDatasets(params);
       if (response.data.success) {
-        const basicDatasets = response.data.data.items || [];
+        const basicDatasets: Dataset[] = (response.data.data as { items: Dataset[] }).items || [];
         
-        // 然后获取每个数据集的卡片详细信息（包含预览图和标签统计）
-        const cardInfoPromises = basicDatasets.map(async (ds: Dataset) => {
-          try {
-            const cardResponse = await datasetApi.getDatasetCardInfo(ds.id);
-            if (cardResponse.data.success) {
-              return cardResponse.data.data;
+        // 立即显示基础列表（没有预览图和统计信息）
+        const initialDatasets: DatasetCardInfo[] = basicDatasets.map(ds => ({
+          ...ds,
+          class_count: ds.class_names?.length || 0,
+          preview_images: [],
+          annotations_per_class: {}
+        }));
+        setDatasets(initialDatasets);
+        
+        // 标记所有数据集为加载中
+        setLoadingIds(new Set(basicDatasets.map(ds => ds.id)));
+        
+        // 逐个加载详细信息（渐进式加载）
+        // 限制并发数为3，避免同时发起过多请求
+        const loadDetails = async () => {
+          const queue = [...basicDatasets];
+          const concurrency = 3;
+          
+          const processNext = async () => {
+            while (queue.length > 0) {
+              const ds = queue.shift()!;
+              try {
+                const cardResponse = await datasetApi.getDatasetCardInfo(ds.id, 8);
+                if (cardResponse.data.success) {
+                  // 立即更新该数据集的信息
+                  const cardData = cardResponse.data.data as DatasetCardInfo;
+                  setDatasets(prev => 
+                    prev.map(item => 
+                      item.id === ds.id ? cardData : item
+                    )
+                  );
+                }
+              } catch (error: any) {
+                console.error(`获取数据集 ${ds.id} 卡片信息失败:`, error);
+              } finally {
+                // 标记该数据集加载完成
+                setLoadingIds(prev => {
+                  const next = new Set(prev);
+                  next.delete(ds.id);
+                  return next;
+                });
+              }
             }
-          } catch (error: any) {
-            console.error(`获取数据集 ${ds.id} 卡片信息失败:`, error);
-          }
-          // 如果获取详细信息失败，使用基本信息
-          return {
-            ...ds,
-            class_count: ds.class_names?.length || 0,
-            preview_images: [],
-            annotations_per_class: {}
-          } as DatasetCardInfo;
-        });
+          };
+          
+          // 启动多个并发任务
+          await Promise.all(Array(concurrency).fill(null).map(processNext));
+        };
         
-        const datasetsWithInfo = await Promise.all(cardInfoPromises);
-        setDatasets(datasetsWithInfo);
+        // 开始加载详细信息（不阻塞）
+        loadDetails();
       } else {
         setError(response.data.message || '获取数据集列表失败');
       }
@@ -541,12 +578,9 @@ export function DatasetListPage() {
     setLabelEditOpen(true);
   };
 
-  const [exporting, setExporting] = useState(false);
-
   const handleExport = async (e: React.MouseEvent, dataset: DatasetCardInfo) => {
     e.stopPropagation();
     try {
-      setExporting(true);
       setExportError(null);
       const response = await datasetApi.exportDataset(dataset.id, 'original');
       
@@ -563,8 +597,6 @@ export function DatasetListPage() {
     } catch (error: any) {
       console.error('导出数据集失败:', error);
       setExportError(error.response?.data?.message || '导出失败，请稍后重试');
-    } finally {
-      setExporting(false);
     }
   };
 
@@ -707,6 +739,7 @@ export function DatasetListPage() {
             <DatasetCard
               key={dataset.id}
               dataset={dataset}
+              isLoading={loadingIds.has(dataset.id)}
               onClick={() => navigate(`/admin/datasets/${dataset.id}`)}
               onDelete={(e) => handleDeleteClick(e, dataset)}
               onEditLabels={(e) => handleEditLabels(e, dataset)}

@@ -1357,14 +1357,18 @@ async def delete_dataset(
     
     # 删除文件目录
     try:
-        if os.path.exists(dataset_path):
+        # 转换为绝对路径
+        abs_dataset_path = os.path.abspath(dataset_path)
+        logger.info(f"尝试删除数据集路径: {abs_dataset_path}")
+        
+        if os.path.exists(abs_dataset_path):
             # 确定数据集根目录
             # 路径格式可能是:
             # 1. uploads/datasets/name_timestamp (划分的数据集)
             # 2. uploads/datasets/name_timestamp/extracted/subdir (上传的数据集)
             
-            path_parts = Path(dataset_path).parts
-            dataset_root = dataset_path
+            path_parts = Path(abs_dataset_path).parts
+            dataset_root = abs_dataset_path
             
             # 如果路径包含 'extracted'，向上追溯到数据集根目录
             if "extracted" in path_parts:
@@ -1383,11 +1387,14 @@ async def delete_dataset(
             if "datasets" in Path(dataset_root).parts:
                 logger.info(f"删除数据集目录: {dataset_root}")
                 shutil.rmtree(dataset_root)
+                logger.info(f"数据集目录删除成功: {dataset_root}")
             else:
                 logger.error(f"拒绝删除不在datasets目录下的路径: {dataset_root}")
+        else:
+            logger.warning(f"数据集路径不存在，跳过文件删除: {abs_dataset_path}")
     except Exception as e:
         # 记录错误但不影响API响应
-        logger.error(f"删除数据集文件失败: {e}")
+        logger.error(f"删除数据集文件失败: {e}", exc_info=True)
     
     return APIResponse.success_response(message="数据集删除成功")
 
@@ -1637,6 +1644,7 @@ async def upload_yaml_config_api(
 @router.get("/{id}/card-info", response_model=APIResponse[DatasetCardInfoResponse])
 async def get_dataset_card_info_api(
     id: str,
+    preview_count: int = Query(20, ge=1, le=50, description="预览图片数量"),
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> APIResponse[DatasetCardInfoResponse]:
@@ -1646,10 +1654,19 @@ async def get_dataset_card_info_api(
     包含：
     - 基本信息（名称、描述、格式等）
     - 类别统计（优先从数据库统计表获取，如不存在则实时分析）
-    - 预览图片（前20张）
+    - 预览图片（前N张，默认20张）
     - 标签分布
     
     如果统计数据为空，会自动触发异步分析任务。
+    
+    Args:
+        id: 数据集ID
+        preview_count: 预览图片数量（1-50，默认20）
+        current_user: 当前用户
+        db: 数据库会话
+        
+    Returns:
+        数据集卡片信息
     """
     # 获取数据集（使用joinedload预加载statistics避免N+1问题）
     from sqlalchemy.orm import joinedload
@@ -1693,10 +1710,10 @@ async def get_dataset_card_info_api(
         except Exception as e:
             logger.warning(f"实时分析数据集 {id} 失败: {e}")
     
-    # 获取预览图片（前20张）
+    # 获取预览图片（限制数量以提高性能）
     from app.utils.dataset_parser import DatasetAnalyzer
     analyzer = DatasetAnalyzer(dataset.path, dataset.format.lower())
-    preview_images = analyzer.get_preview_images(20)
+    preview_images = analyzer.get_preview_images(preview_count)
     
     # 将预览图片的 id 转换为 name_id（文件名，不含扩展名）
     # 这样前端可以直接用这个 id 请求缩略图

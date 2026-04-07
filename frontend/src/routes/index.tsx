@@ -15,6 +15,7 @@ const UserManagementPage = lazy(() => import('@/pages/admin/UserManagementPage')
 const DatasetListPage = lazy(() => import('@/pages/admin/DatasetListPage'));
 const DatasetUploadPage = lazy(() => import('@/pages/admin/DatasetUploadPage'));
 const DatasetDetailPage = lazy(() => import('@/pages/admin/DatasetDetailPage'));
+const AugmentationPage = lazy(() => import('@/pages/admin/AugmentationPage'));
 
 // 加载中组件
 const PageLoading = () => (
@@ -141,6 +142,16 @@ const routes: RouteObject[] = [
               <ProtectedRoute requireAdmin>
                 <Suspense fallback={<PageLoading />}>
                   <DatasetDetailPage />
+                </Suspense>
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'augmentation',
+            element: (
+              <ProtectedRoute requireAdmin>
+                <Suspense fallback={<PageLoading />}>
+                  <AugmentationPage />
                 </Suspense>
               </ProtectedRoute>
             ),

@@ -40,6 +40,12 @@ celery_app.conf.update(
     task_send_sent_event=True,
     # Worker 发送事件
     worker_send_task_events=True,
+    # Windows 优化配置
+    worker_prefetch_multiplier=1,  # 减少预取任务数
+    task_acks_late=True,  # 任务完成后才确认
+    broker_connection_retry_on_startup=True,
+    # 内存优化
+    worker_max_tasks_per_child=50,  # 每个 worker 处理50个任务后重启
 )
 
 
