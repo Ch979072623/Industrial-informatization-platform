@@ -38,9 +38,9 @@ const navItems: NavItem[] = [
   },
   {
     title: '数据生成',
-    href: '/generation',
+    href: '/admin/generation',
     icon: <Layers className="h-5 w-5" />,
-    roles: ['admin', 'user'],
+    roles: ['admin'],
   },
   {
     title: '模型构建',

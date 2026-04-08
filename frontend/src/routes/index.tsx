@@ -16,6 +16,8 @@ const DatasetListPage = lazy(() => import('@/pages/admin/DatasetListPage'));
 const DatasetUploadPage = lazy(() => import('@/pages/admin/DatasetUploadPage'));
 const DatasetDetailPage = lazy(() => import('@/pages/admin/DatasetDetailPage'));
 const AugmentationPage = lazy(() => import('@/pages/admin/AugmentationPage'));
+const GenerationPage = lazy(() => import('@/pages/admin/GenerationPage'));
+const GenerationTaskListPage = lazy(() => import('@/pages/admin/GenerationTaskListPage'));
 
 // 加载中组件
 const PageLoading = () => (
@@ -152,6 +154,26 @@ const routes: RouteObject[] = [
               <ProtectedRoute requireAdmin>
                 <Suspense fallback={<PageLoading />}>
                   <AugmentationPage />
+                </Suspense>
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'generation',
+            element: (
+              <ProtectedRoute requireAdmin>
+                <Suspense fallback={<PageLoading />}>
+                  <GenerationPage />
+                </Suspense>
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'generation/tasks',
+            element: (
+              <ProtectedRoute requireAdmin>
+                <Suspense fallback={<PageLoading />}>
+                  <GenerationTaskListPage />
                 </Suspense>
               </ProtectedRoute>
             ),

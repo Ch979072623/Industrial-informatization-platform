@@ -286,4 +286,118 @@ export const augmentationApi = {
     api.post<ApiResponse<PipelineValidationResponse>>('/augmentation/validate', pipelineConfig),
 };
 
+// 数据生成 API
+import type {
+  GeneratorInfo,
+  GeneratorListResponse,
+  ValidateConfigRequest,
+  ValidateConfigResponse,
+  GenerationPreviewRequest,
+  GenerationPreviewResponse,
+  GenerationTemplate,
+  CreateTemplateRequest,
+  UpdateTemplateRequest,
+  GenerationJob,
+  CreateJobRequest,
+  UpdateJobRequest,
+  JobListQuery,
+  ExecuteGenerationRequest,
+  ExecuteGenerationResponse,
+  JobControlRequest,
+  JobControlResponse,
+  JobProgressResponse,
+  QualityReportResponse,
+  MergeGenerationRequest,
+  MergeGenerationResponse,
+  DefectCacheInfo,
+  DefectCacheListResponse,
+  RefreshCacheRequest,
+  HeatmapGenerateRequest,
+  HeatmapGenerateResponse,
+} from '@/types/generation';
+
+export const generationApi = {
+  // 数据集列表（用于选择缺陷源和基底）
+  getDatasets: (params?: { has_annotations?: boolean }) =>
+    api.get<ApiResponse<{ items: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      format: string;
+      image_count: number;
+      annotated_count: number;
+      class_names: string[];
+      created_at: string;
+    }>; total: number }>>('/generation/datasets', { params }),
+
+  // 生成器管理
+  getGenerators: () =>
+    api.get<ApiResponse<GeneratorListResponse>>('/generation/generators'),
+
+  validateConfig: (data: ValidateConfigRequest) =>
+    api.post<ApiResponse<ValidateConfigResponse>>('/generation/validate', data),
+
+  // 预览
+  createPreview: (data: GenerationPreviewRequest) =>
+    api.post<ApiResponse<GenerationPreviewResponse>>('/generation/preview', data),
+
+  // 模板管理
+  getTemplates: (params?: { page?: number; page_size?: number }) =>
+    api.get<ApiResponse<{ items: GenerationTemplate[]; total: number }>>('/generation/templates', { params }),
+
+  createTemplate: (data: CreateTemplateRequest) =>
+    api.post<ApiResponse<GenerationTemplate>>('/generation/templates', data),
+
+  updateTemplate: (id: string, data: UpdateTemplateRequest) =>
+    api.put<ApiResponse<GenerationTemplate>>(`/generation/templates/${id}`, data),
+
+  deleteTemplate: (id: string) =>
+    api.delete<ApiResponse>(`/generation/templates/${id}`),
+
+  // 任务管理
+  getJobs: (params?: JobListQuery) =>
+    api.get<ApiResponse<{ items: GenerationJob[]; total: number }>>('/generation/jobs', { params }),
+
+  getJob: (id: string) =>
+    api.get<ApiResponse<GenerationJob>>(`/generation/jobs/${id}`),
+
+  executeGeneration: (data: ExecuteGenerationRequest) =>
+    api.post<ApiResponse<ExecuteGenerationResponse>>('/generation/execute', data),
+
+  controlJob: (id: string, data: JobControlRequest) =>
+    api.post<ApiResponse<JobControlResponse>>(`/generation/jobs/${id}/control`, data),
+
+  getJobProgress: (id: string) =>
+    api.get<ApiResponse<JobProgressResponse>>(`/generation/jobs/${id}/progress`),
+
+  // 质量报告
+  getQualityReport: (jobId: string) =>
+    api.get<ApiResponse<QualityReportResponse>>(`/generation/jobs/${jobId}/quality-report`),
+
+  // 合并结果
+  mergeResults: (data: MergeGenerationRequest) =>
+    api.post<ApiResponse<MergeGenerationResponse>>('/generation/merge', data),
+
+  // 缓存管理
+  getCaches: () =>
+    api.get<ApiResponse<DefectCacheListResponse>>('/generation/cache'),
+
+  refreshCache: (data: RefreshCacheRequest) =>
+    api.post<ApiResponse>('/generation/cache/refresh', data),
+
+  deleteCache: (cacheKey: string) =>
+    api.delete<ApiResponse>(`/generation/cache/${cacheKey}`),
+
+  // 热力图工具
+  generateHeatmap: (data: HeatmapGenerateRequest) =>
+    api.post<ApiResponse<HeatmapGenerateResponse>>('/generation/heatmap/generate', data),
+
+  // 删除任务
+  deleteJob: (id: string) =>
+    api.delete<ApiResponse<{ deleted_count: number }>>(`/generation/jobs/${id}`),
+
+  deleteJobs: (params: { status?: string; job_ids?: string[] }) =>
+    api.delete<ApiResponse<{ deleted_count: number }>>('/generation/jobs', { data: params }),
+};
+
 export default api;

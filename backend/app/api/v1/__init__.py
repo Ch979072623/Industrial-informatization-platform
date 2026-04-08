@@ -3,7 +3,7 @@ API V1 路由模块
 """
 from fastapi import APIRouter
 
-from app.api.v1 import auth, users, datasets, augmentation
+from app.api.v1 import auth, users, datasets, augmentation, generation
 
 api_router = APIRouter(prefix="/v1")
 
@@ -12,6 +12,7 @@ api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(datasets.router)
 api_router.include_router(augmentation.router)
+api_router.include_router(generation.router)
 
 # 预留的其他路由（后续实现）
 # from app.api.v1 import models, training, detection, analytics
