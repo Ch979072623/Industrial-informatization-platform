@@ -1,0 +1,13 @@
+{
+  "type": "Linear",
+  "category": "atomic",
+  "display_name": "全连接层",
+  "is_composite": false,
+  "params_schema": [
+    {"name": "in_features", "type": "int", "default": 128, "min": 1, "description": "输入特征数"},
+    {"name": "out_features", "type": "int", "default": 128, "min": 1, "description": "输出特征数"},
+    {"name": "bias", "type": "bool", "default": true, "description": "是否使用偏置"}
+  ],
+  "input_ports": [{"name": "input", "type": "tensor"}],
+  "output_ports": [{"name": "output", "type": "tensor"}]
+}

@@ -1,0 +1,51 @@
+{
+  "type": "FocusFeature",
+  "category": "neck",
+  "display_name": "聚焦特征融合",
+  "is_composite": true,
+  "params_schema": [
+    {"name": "inc", "type": "int[]", "default": [512, 256, 128], "description": "输入通道列表 [P5,P4,P3]"},
+    {"name": "kernel_sizes", "type": "int[]", "default": [5, 7, 9, 11], "description": "DW卷积核列表"},
+    {"name": "e", "type": "float", "default": 0.5, "description": "通道扩展系数"}
+  ],
+  "proxy_inputs": [
+    {"sub_node_id": "p5_up", "port_index": 0, "name": "p5_in"},
+    {"sub_node_id": "p4_conv", "port_index": 0, "name": "p4_in"},
+    {"sub_node_id": "p3_down", "port_index": 0, "name": "p3_in"}
+  ],
+  "proxy_outputs": [
+    {"sub_node_id": "add_residual", "port_index": 0, "name": "out"}
+  ],
+  "sub_nodes": [
+    {"id": "p5_up", "type": "Upsample", "params": {"scale_factor": 2, "mode": "nearest"}, "position": {"x": 50, "y": 50}},
+    {"id": "p5_conv", "type": "Conv2d", "params": {"in_channels": "${inc[0]}", "out_channels": "${int(inc[1] * e)}", "kernel_size": 1, "bias": false}, "position": {"x": 50, "y": 130}},
+    {"id": "p4_conv", "type": "Conv2d", "params": {"in_channels": "${inc[1]}", "out_channels": "${int(inc[1] * e)}", "kernel_size": 1, "bias": false}, "position": {"x": 200, "y": 50}},
+    {"id": "p3_down", "type": "ADown", "params": {"c1": "${inc[2]}", "c2": "${int(inc[1] * e)}"}, "position": {"x": 350, "y": 50}},
+    {"id": "concat", "type": "Concat", "params": {"dim": 1}, "position": {"x": 200, "y": 180}},
+    {"id": "dw_0", "type": "Conv2d", "params": {"in_channels": "${int(inc[1] * e) * 3}", "out_channels": "${int(inc[1] * e) * 3}", "kernel_size": "${kernel_sizes[0]}", "padding": "${kernel_sizes[0] // 2}", "groups": "${int(inc[1] * e) * 3}", "bias": false}, "position": {"x": 50, "y": 300}},
+    {"id": "dw_1", "type": "Conv2d", "params": {"in_channels": "${int(inc[1] * e) * 3}", "out_channels": "${int(inc[1] * e) * 3}", "kernel_size": "${kernel_sizes[1]}", "padding": "${kernel_sizes[1] // 2}", "groups": "${int(inc[1] * e) * 3}", "bias": false}, "position": {"x": 150, "y": 300}},
+    {"id": "dw_2", "type": "Conv2d", "params": {"in_channels": "${int(inc[1] * e) * 3}", "out_channels": "${int(inc[1] * e) * 3}", "kernel_size": "${kernel_sizes[2]}", "padding": "${kernel_sizes[2] // 2}", "groups": "${int(inc[1] * e) * 3}", "bias": false}, "position": {"x": 250, "y": 300}},
+    {"id": "dw_3", "type": "Conv2d", "params": {"in_channels": "${int(inc[1] * e) * 3}", "out_channels": "${int(inc[1] * e) * 3}", "kernel_size": "${kernel_sizes[3]}", "padding": "${kernel_sizes[3] // 2}", "groups": "${int(inc[1] * e) * 3}", "bias": false}, "position": {"x": 350, "y": 300}},
+    {"id": "add_dw", "type": "Add", "params": {}, "position": {"x": 200, "y": 420}},
+    {"id": "pw_conv", "type": "Conv2d", "params": {"in_channels": "${int(inc[1] * e) * 3}", "out_channels": "${int(inc[1] * e) * 3}", "kernel_size": 1, "bias": false}, "position": {"x": 200, "y": 500}},
+    {"id": "add_residual", "type": "Add", "params": {}, "position": {"x": 200, "y": 600}}
+  ],
+  "sub_edges": [
+    {"source": "p5_up", "source_port": 0, "target": "p5_conv", "target_port": 0},
+    {"source": "p5_conv", "source_port": 0, "target": "concat", "target_port": 0},
+    {"source": "p4_conv", "source_port": 0, "target": "concat", "target_port": 1},
+    {"source": "p3_down", "source_port": 0, "target": "concat", "target_port": 2},
+    {"source": "concat", "source_port": 0, "target": "dw_0", "target_port": 0},
+    {"source": "concat", "source_port": 0, "target": "dw_1", "target_port": 0},
+    {"source": "concat", "source_port": 0, "target": "dw_2", "target_port": 0},
+    {"source": "concat", "source_port": 0, "target": "dw_3", "target_port": 0},
+    {"source": "concat", "source_port": 0, "target": "add_dw", "target_port": 0},
+    {"source": "concat", "source_port": 0, "target": "add_residual", "target_port": 0},
+    {"source": "dw_0", "source_port": 0, "target": "add_dw", "target_port": 1},
+    {"source": "dw_1", "source_port": 0, "target": "add_dw", "target_port": 2},
+    {"source": "dw_2", "source_port": 0, "target": "add_dw", "target_port": 3},
+    {"source": "dw_3", "source_port": 0, "target": "add_dw", "target_port": 4},
+    {"source": "add_dw", "source_port": 0, "target": "pw_conv", "target_port": 0},
+    {"source": "pw_conv", "source_port": 0, "target": "add_residual", "target_port": 1}
+  ]
+}

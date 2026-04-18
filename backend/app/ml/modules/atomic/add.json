@@ -1,0 +1,12 @@
+{
+  "type": "Add",
+  "category": "atomic",
+  "display_name": "张量相加",
+  "is_composite": false,
+  "params_schema": [],
+  "input_ports": [
+    {"name": "a", "type": "tensor"},
+    {"name": "b", "type": "tensor"}
+  ],
+  "output_ports": [{"name": "output", "type": "tensor"}]
+}

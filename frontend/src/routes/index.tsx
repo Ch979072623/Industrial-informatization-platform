@@ -18,6 +18,7 @@ const DatasetDetailPage = lazy(() => import('@/pages/admin/DatasetDetailPage'));
 const AugmentationPage = lazy(() => import('@/pages/admin/AugmentationPage'));
 const GenerationPage = lazy(() => import('@/pages/admin/GenerationPage'));
 const GenerationTaskListPage = lazy(() => import('@/pages/admin/GenerationTaskListPage'));
+const ModelBuilderPage = lazy(() => import('@/pages/admin/ModelBuilder'));
 
 // 加载中组件
 const PageLoading = () => (
@@ -174,6 +175,16 @@ const routes: RouteObject[] = [
               <ProtectedRoute requireAdmin>
                 <Suspense fallback={<PageLoading />}>
                   <GenerationTaskListPage />
+                </Suspense>
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'model-builder',
+            element: (
+              <ProtectedRoute requireAdmin>
+                <Suspense fallback={<PageLoading />}>
+                  <ModelBuilderPage />
                 </Suspense>
               </ProtectedRoute>
             ),

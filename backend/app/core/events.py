@@ -48,44 +48,54 @@ async def init_celery() -> None:
         logger.warning(f"Celery 初始化检查失败: {e}")
 
 
+async def init_module_registry() -> None:
+    """初始化模块注册表：扫描 schema 文件并同步到数据库"""
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.ml.modules.registry import sync_builtin_modules
+
+        async with AsyncSessionLocal() as db:
+            await sync_builtin_modules(db)
+    except Exception as e:
+        logger.error(f"模块注册表初始化失败: {e}")
+        # 启动失败不应阻断，记录错误即可
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     """
     FastAPI 生命周期管理器
-    
+
     处理应用启动和关闭事件
-    
-    Args:
-        app: FastAPI 应用实例
-        
-    Yields:
-        None
     """
     # 启动事件
     logger.info(f"启动 {settings.app_name} v{settings.app_version}")
     logger.info(f"环境: {settings.environment}")
-    
+
     try:
         # 初始化数据库
         await init_database()
-        
+
+        # 同步模块注册表
+        await init_module_registry()
+
         # 检查 Celery 配置
         await init_celery()
-        
+
         logger.info("应用启动完成")
     except Exception as e:
         logger.error(f"启动过程中出现错误: {e}")
         raise
-    
+
     yield
-    
+
     # 关闭事件
     logger.info("正在关闭应用...")
-    
+
     try:
         # 关闭数据库连接
         await close_database()
-        
+
         logger.info("应用已关闭")
     except Exception as e:
         logger.error(f"关闭过程中出现错误: {e}")
@@ -94,8 +104,5 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 def setup_events(app: FastAPI) -> None:
     """
     设置应用生命周期事件
-    
-    Args:
-        app: FastAPI 应用实例
     """
     app.router.lifespan_context = lifespan

@@ -1,0 +1,13 @@
+{
+  "type": "AvgPool2d",
+  "category": "atomic",
+  "display_name": "平均池化",
+  "is_composite": false,
+  "params_schema": [
+    {"name": "kernel_size", "type": "int", "default": 2, "min": 1, "description": "池化核大小"},
+    {"name": "stride", "type": "int", "default": 2, "min": 1, "description": "步长"},
+    {"name": "padding", "type": "int", "default": 0, "min": 0, "description": "填充"}
+  ],
+  "input_ports": [{"name": "input", "type": "tensor"}],
+  "output_ports": [{"name": "output", "type": "tensor"}]
+}

@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import { storage } from '@/utils/storage';
-import type { ApiResponse, Token } from '@/types';
+import type { ApiResponse, Token, TokenRefreshResponse } from '@/types';
 
 // 创建 Axios 实例
 const api: AxiosInstance = axios.create({
@@ -25,6 +25,9 @@ api.interceptors.request.use(
   }
 );
 
+// 全局 token 刷新锁：所有并发 401 请求共享同一个刷新 Promise
+let refreshingPromise: Promise<string> | null = null;
+
 // 响应拦截器 - 处理 Token 刷新和错误
 api.interceptors.response.use(
   (response) => response,
@@ -35,33 +38,41 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
-      try {
-        const refreshToken = storage.getRefreshToken();
-        if (!refreshToken) {
-          throw new Error('No refresh token');
-        }
+      // 全局锁：所有并发 401 请求等待同一个刷新
+      if (!refreshingPromise) {
+        refreshingPromise = (async () => {
+          const refreshToken = storage.getRefreshToken();
+          if (!refreshToken) throw new Error('No refresh token');
 
-        // 调用刷新接口
-        const response = await axios.post<ApiResponse<Token>>('/api/v1/auth/refresh', {
-          refresh_token: refreshToken,
-        });
+          const resp = await axios.post<ApiResponse<TokenRefreshResponse>>('/api/v1/auth/refresh', {
+            refresh_token: refreshToken,
+          });
 
-        if (response.data.success) {
-          const { access_token, refresh_token } = response.data.data;
+          if (!resp.data.success) throw new Error('Refresh failed');
+
+          const { access_token } = resp.data.data;
           storage.setToken(access_token);
-          storage.setRefreshToken(refresh_token);
+          // 后端 refresh 接口只返回新 access_token，不返回 refresh_token
+          // refresh_token 保持原值，不要覆盖成 undefined
+          return access_token;
+        })().finally(() => {
+          // 推迟到下一个 microtask 再清空，保证当前 tick 里所有并发请求
+          // 都已完成 if (!refreshingPromise) 判断并共享同一个 promise
+          queueMicrotask(() => { refreshingPromise = null; });
+        });
+      }
 
-          // 重试原请求
-          if (originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${access_token}`;
-          }
-          return api(originalRequest);
+      try {
+        const accessToken = await refreshingPromise;
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         }
-      } catch (refreshError) {
-        // 刷新失败，清除登录状态并跳转到登录页
+        return api(originalRequest);
+      } catch (e) {
+        console.error('[CRITICAL] token refresh failed, redirecting to login', e);
         storage.clear();
         window.location.href = '/login';
-        return Promise.reject(refreshError);
+        return Promise.reject(error);
       }
     }
 
@@ -400,4 +411,93 @@ export const generationApi = {
     api.delete<ApiResponse<{ deleted_count: number }>>('/generation/jobs', { data: params }),
 };
 
+// 机器学习模块 API（新 module_definitions 表）
+import type {
+  ModuleDefinition,
+  ModuleDefinitionDetail,
+  MLModuleQuery,
+  ConnectionValidationResult,
+  ModelValidationResult,
+  ModelBuilderConfig,
+  ModelBuilderConfigListItem,
+  ModelBuilderConfigCreate,
+  ModelBuilderConfigUpdate,
+  ModelNode,
+  ModelEdge,
+} from '@/types/mlModule';
+
+export const mlModuleApi = {
+  // 获取模块分类
+  getCategories: () =>
+    api.get<ApiResponse<Array<{key: string; label: string; icon: string}>>>('/models/modules/categories'),
+
+  // 获取所有模块（扁平列表，前端按 category 分组）
+  getModules: (query?: MLModuleQuery) =>
+    api.get<ApiResponse<ModuleDefinition[]>>('/models/modules', { params: query }),
+
+  // 获取单个模块详情（按 type 查询）
+  getModule: (moduleType: string) =>
+    api.get<ApiResponse<ModuleDefinitionDetail>>(`/models/modules/${moduleType}`),
+
+  // 验证连接
+  validateConnection: (
+    sourceModuleId: string,
+    targetModuleId: string,
+    sourcePort?: string,
+    targetPort?: string,
+    currentNodes?: ModelNode[],
+    currentEdges?: ModelEdge[]
+  ) =>
+    api.post<ApiResponse<ConnectionValidationResult>>('/models/modules/validate-connection', {
+      source_module_id: sourceModuleId,
+      target_module_id: targetModuleId,
+      source_port: sourcePort,
+      target_port: targetPort,
+      current_nodes: currentNodes,
+      current_edges: currentEdges,
+    }),
+
+  // 验证模型
+  validateModel: (nodes: ModelNode[], edges: ModelEdge[]) =>
+    api.post<ApiResponse<ModelValidationResult>>('/models/modules/validate-model', { nodes, edges }),
+};
+
+// 模型构建器配置 API
+export const modelBuilderApi = {
+  // 获取配置列表
+  getConfigs: (params?: { page?: number; page_size?: number; search?: string }) =>
+    api.get<ApiResponse<{ items: ModelBuilderConfigListItem[]; total: number }>>('/model-configs', { params }),
+
+  // 获取单个配置
+  getConfig: (configId: string) =>
+    api.get<ApiResponse<ModelBuilderConfig>>(`/model-configs/${configId}`),
+
+  // 创建配置
+  createConfig: (data: ModelBuilderConfigCreate) =>
+    api.post<ApiResponse<ModelBuilderConfig>>('/model-configs', data),
+
+  // 更新配置
+  updateConfig: (configId: string, data: ModelBuilderConfigUpdate) =>
+    api.put<ApiResponse<ModelBuilderConfig>>(`/model-configs/${configId}`, data),
+
+  // 删除配置
+  deleteConfig: (configId: string) =>
+    api.delete<ApiResponse>(`/model-configs/${configId}`),
+
+  // 克隆配置
+  cloneConfig: (configId: string, newName?: string) =>
+    api.post<ApiResponse<ModelBuilderConfig>>(`/model-configs/${configId}/clone`, null, {
+      params: newName ? { new_name: newName } : undefined,
+    }),
+
+  // 获取代码
+  getCode: (configId: string) =>
+    api.get<ApiResponse<{ code: string; language: string }>>(`/model-configs/${configId}/code`),
+};
+
 export default api;
+
+// 开发环境把 api 实例挂到 window，方便 Console 手动测试并发刷新
+if (import.meta.env.DEV) {
+  (window as unknown as { __api?: AxiosInstance }).__api = api;
+}

@@ -1,0 +1,31 @@
+{
+  "type": "Bottleneck",
+  "category": "atomic",
+  "display_name": "残差瓶颈",
+  "is_composite": true,
+  "params_schema": [
+    {"name": "c1", "type": "int", "default": 64, "min": 1, "description": "输入通道"},
+    {"name": "c2", "type": "int", "default": 64, "min": 1, "description": "输出通道"},
+    {"name": "shortcut", "type": "bool", "default": true, "description": "是否使用快捷连接"},
+    {"name": "g", "type": "int", "default": 1, "min": 1, "description": "分组卷积组数"},
+    {"name": "e", "type": "float", "default": 1.0, "description": "通道扩展系数"}
+  ],
+  "proxy_inputs": [
+    {"sub_node_id": "identity", "port_index": 0, "name": "x"}
+  ],
+  "proxy_outputs": [
+    {"sub_node_id": "add", "port_index": 0, "name": "out"}
+  ],
+  "sub_nodes": [
+    {"id": "identity", "type": "Identity", "params": {}, "position": {"x": 50, "y": 50}},
+    {"id": "cv1", "type": "Conv2d", "params": {"in_channels": "${c1}", "out_channels": "${int(c2 * e)}", "kernel_size": 3, "padding": 1, "groups": "${g}", "bias": false}, "position": {"x": 50, "y": 150}},
+    {"id": "cv2", "type": "Conv2d", "params": {"in_channels": "${int(c2 * e)}", "out_channels": "${c2}", "kernel_size": 3, "padding": 1, "groups": "${g}", "bias": false}, "position": {"x": 50, "y": 250}},
+    {"id": "add", "type": "Add", "params": {}, "position": {"x": 50, "y": 350}}
+  ],
+  "sub_edges": [
+    {"source": "identity", "source_port": 0, "target": "cv1", "target_port": 0},
+    {"source": "cv1", "source_port": 0, "target": "cv2", "target_port": 0},
+    {"source": "cv2", "source_port": 0, "target": "add", "target_port": 0},
+    {"source": "identity", "source_port": 0, "target": "add", "target_port": 1}
+  ]
+}

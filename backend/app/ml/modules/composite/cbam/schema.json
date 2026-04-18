@@ -1,0 +1,60 @@
+{
+  "type": "CBAM",
+  "category": "attention",
+  "display_name": "卷积块注意力模块",
+  "is_composite": true,
+  "params_schema": [
+    {"name": "in_channels", "type": "int", "default": 64, "min": 1, "description": "输入通道"},
+    {"name": "reduction_ratio", "type": "int", "default": 16, "min": 1, "description": "MLP通道压缩比"},
+    {"name": "spatial_kernel", "type": "int", "default": 7, "min": 3, "description": "空间注意力卷积核"}
+  ],
+  "proxy_inputs": [
+    {"sub_node_id": "identity_in", "port_index": 0, "name": "x"}
+  ],
+  "proxy_outputs": [
+    {"sub_node_id": "mul_sa", "port_index": 0, "name": "out"}
+  ],
+  "sub_nodes": [
+    {"id": "identity_in", "type": "Identity", "params": {}, "position": {"x": 150, "y": 30}},
+    {"id": "ca_gap", "type": "AdaptiveAvgPool2d", "params": {"output_size": 1}, "position": {"x": 50, "y": 100}},
+    {"id": "ca_gmp", "type": "AdaptiveMaxPool2d", "params": {"output_size": 1}, "position": {"x": 150, "y": 100}},
+    {"id": "ca_mlp_down_gap", "type": "Conv2d", "params": {"in_channels": "${in_channels}", "out_channels": "${in_channels // reduction_ratio}", "kernel_size": 1, "bias": false}, "position": {"x": 30, "y": 200}},
+    {"id": "ca_relu_gap", "type": "ReLU", "params": {}, "position": {"x": 30, "y": 280}},
+    {"id": "ca_mlp_up_gap", "type": "Conv2d", "params": {"in_channels": "${in_channels // reduction_ratio}", "out_channels": "${in_channels}", "kernel_size": 1, "bias": false}, "position": {"x": 30, "y": 360}},
+    {"id": "ca_mlp_down_gmp", "type": "Conv2d", "params": {"in_channels": "${in_channels}", "out_channels": "${in_channels // reduction_ratio}", "kernel_size": 1, "bias": false}, "position": {"x": 170, "y": 200}},
+    {"id": "ca_relu_gmp", "type": "ReLU", "params": {}, "position": {"x": 170, "y": 280}},
+    {"id": "ca_mlp_up_gmp", "type": "Conv2d", "params": {"in_channels": "${in_channels // reduction_ratio}", "out_channels": "${in_channels}", "kernel_size": 1, "bias": false}, "position": {"x": 170, "y": 360}},
+    {"id": "ca_add", "type": "Add", "params": {}, "position": {"x": 100, "y": 450}},
+    {"id": "ca_sigmoid", "type": "Sigmoid", "params": {}, "position": {"x": 100, "y": 530}},
+    {"id": "mul_ca", "type": "Mul", "params": {}, "position": {"x": 150, "y": 620}},
+    {"id": "sa_mean", "type": "ChannelMean", "params": {}, "position": {"x": 50, "y": 700}},
+    {"id": "sa_max", "type": "ChannelMax", "params": {}, "position": {"x": 150, "y": 700}},
+    {"id": "sa_concat", "type": "Concat", "params": {"dim": 1}, "position": {"x": 100, "y": 780}},
+    {"id": "sa_conv", "type": "Conv2d", "params": {"in_channels": 2, "out_channels": 1, "kernel_size": "${spatial_kernel}", "padding": "${spatial_kernel // 2}", "bias": false}, "position": {"x": 100, "y": 860}},
+    {"id": "sa_sigmoid", "type": "Sigmoid", "params": {}, "position": {"x": 100, "y": 940}},
+    {"id": "mul_sa", "type": "Mul", "params": {}, "position": {"x": 150, "y": 1030}}
+  ],
+  "sub_edges": [
+    {"source": "identity_in", "source_port": 0, "target": "ca_gap", "target_port": 0},
+    {"source": "identity_in", "source_port": 0, "target": "ca_gmp", "target_port": 0},
+    {"source": "identity_in", "source_port": 0, "target": "mul_ca", "target_port": 0},
+    {"source": "ca_gap", "source_port": 0, "target": "ca_mlp_down_gap", "target_port": 0},
+    {"source": "ca_gmp", "source_port": 0, "target": "ca_mlp_down_gmp", "target_port": 0},
+    {"source": "ca_mlp_down_gap", "source_port": 0, "target": "ca_relu_gap", "target_port": 0},
+    {"source": "ca_relu_gap", "source_port": 0, "target": "ca_mlp_up_gap", "target_port": 0},
+    {"source": "ca_mlp_down_gmp", "source_port": 0, "target": "ca_relu_gmp", "target_port": 0},
+    {"source": "ca_relu_gmp", "source_port": 0, "target": "ca_mlp_up_gmp", "target_port": 0},
+    {"source": "ca_mlp_up_gap", "source_port": 0, "target": "ca_add", "target_port": 0},
+    {"source": "ca_mlp_up_gmp", "source_port": 0, "target": "ca_add", "target_port": 1},
+    {"source": "ca_add", "source_port": 0, "target": "ca_sigmoid", "target_port": 0},
+    {"source": "ca_sigmoid", "source_port": 0, "target": "mul_ca", "target_port": 1},
+    {"source": "mul_ca", "source_port": 0, "target": "sa_mean", "target_port": 0},
+    {"source": "mul_ca", "source_port": 0, "target": "sa_max", "target_port": 0},
+    {"source": "mul_ca", "source_port": 0, "target": "mul_sa", "target_port": 0},
+    {"source": "sa_mean", "source_port": 0, "target": "sa_concat", "target_port": 0},
+    {"source": "sa_max", "source_port": 0, "target": "sa_concat", "target_port": 1},
+    {"source": "sa_concat", "source_port": 0, "target": "sa_conv", "target_port": 0},
+    {"source": "sa_conv", "source_port": 0, "target": "sa_sigmoid", "target_port": 0},
+    {"source": "sa_sigmoid", "source_port": 0, "target": "mul_sa", "target_port": 1}
+  ]
+}

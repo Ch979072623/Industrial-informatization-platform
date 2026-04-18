@@ -27,9 +27,17 @@ export interface UserRegister {
 }
 
 // Token 相关
+/** 登录响应（含 refresh_token） */
 export interface Token {
   access_token: string;
   refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+/** 刷新响应（后端只下发新 access_token，refresh_token 不变） */
+export interface TokenRefreshResponse {
+  access_token: string;
   token_type: string;
   expires_in: number;
 }

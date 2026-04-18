@@ -1,0 +1,11 @@
+{
+  "type": "SiLU",
+  "category": "atomic",
+  "display_name": "SiLU激活",
+  "is_composite": false,
+  "params_schema": [
+    {"name": "inplace", "type": "bool", "default": false, "description": "是否原地操作"}
+  ],
+  "input_ports": [{"name": "input", "type": "tensor"}],
+  "output_ports": [{"name": "output", "type": "tensor"}]
+}

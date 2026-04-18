@@ -1,0 +1,11 @@
+{
+  "type": "AdaptiveMaxPool2d",
+  "category": "atomic",
+  "display_name": "自适应最大池化",
+  "is_composite": false,
+  "params_schema": [
+    {"name": "output_size", "type": "int", "default": 1, "min": 1, "description": "输出尺寸"}
+  ],
+  "input_ports": [{"name": "input", "type": "tensor"}],
+  "output_ports": [{"name": "output", "type": "tensor"}]
+}

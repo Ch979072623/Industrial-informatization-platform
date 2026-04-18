@@ -1,0 +1,43 @@
+{
+  "type": "ResNetBottleneck",
+  "category": "backbone",
+  "display_name": "残差瓶颈(Identity Shortcut)",
+  "is_composite": true,
+  "params_schema": [
+    {"name": "in_channels", "type": "int", "default": 64, "min": 1, "description": "输入通道"},
+    {"name": "out_channels", "type": "int", "default": 256, "min": 1, "description": "输出通道（中间层=out_channels//4）"},
+    {"name": "stride", "type": "int", "default": 1, "min": 1, "description": "步长"}
+  ],
+  "proxy_inputs": [
+    {"sub_node_id": "input_anchor", "port_index": 0, "name": "x"}
+  ],
+  "proxy_outputs": [
+    {"sub_node_id": "act_out", "port_index": 0, "name": "out"}
+  ],
+  "sub_nodes": [
+    {"id": "input_anchor", "type": "Identity", "params": {}, "position": {"x": 100, "y": 20}},
+    {"id": "conv1", "type": "Conv2d", "params": {"in_channels": "${in_channels}", "out_channels": "${out_channels // 4}", "kernel_size": 1, "bias": false}, "position": {"x": 100, "y": 80}},
+    {"id": "bn1", "type": "BatchNorm2d", "params": {"num_features": "${out_channels // 4}"}, "position": {"x": 100, "y": 140}},
+    {"id": "act1", "type": "SiLU", "params": {}, "position": {"x": 100, "y": 200}},
+    {"id": "conv2", "type": "Conv2d", "params": {"in_channels": "${out_channels // 4}", "out_channels": "${out_channels // 4}", "kernel_size": 3, "stride": "${stride}", "padding": 1, "bias": false}, "position": {"x": 100, "y": 260}},
+    {"id": "bn2", "type": "BatchNorm2d", "params": {"num_features": "${out_channels // 4}"}, "position": {"x": 100, "y": 320}},
+    {"id": "act2", "type": "SiLU", "params": {}, "position": {"x": 100, "y": 380}},
+    {"id": "conv3", "type": "Conv2d", "params": {"in_channels": "${out_channels // 4}", "out_channels": "${out_channels}", "kernel_size": 1, "bias": false}, "position": {"x": 100, "y": 440}},
+    {"id": "bn3", "type": "BatchNorm2d", "params": {"num_features": "${out_channels}"}, "position": {"x": 100, "y": 500}},
+    {"id": "add", "type": "Add", "params": {}, "position": {"x": 190, "y": 580}},
+    {"id": "act_out", "type": "SiLU", "params": {}, "position": {"x": 190, "y": 650}}
+  ],
+  "sub_edges": [
+    {"source": "input_anchor", "source_port": 0, "target": "conv1", "target_port": 0},
+    {"source": "input_anchor", "source_port": 0, "target": "add", "target_port": 1},
+    {"source": "conv1", "source_port": 0, "target": "bn1", "target_port": 0},
+    {"source": "bn1", "source_port": 0, "target": "act1", "target_port": 0},
+    {"source": "act1", "source_port": 0, "target": "conv2", "target_port": 0},
+    {"source": "conv2", "source_port": 0, "target": "bn2", "target_port": 0},
+    {"source": "bn2", "source_port": 0, "target": "act2", "target_port": 0},
+    {"source": "act2", "source_port": 0, "target": "conv3", "target_port": 0},
+    {"source": "conv3", "source_port": 0, "target": "bn3", "target_port": 0},
+    {"source": "bn3", "source_port": 0, "target": "add", "target_port": 0},
+    {"source": "add", "source_port": 0, "target": "act_out", "target_port": 0}
+  ]
+}

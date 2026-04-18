@@ -1,0 +1,38 @@
+{
+  "type": "C2f",
+  "category": "backbone",
+  "display_name": "C2f模块",
+  "is_composite": true,
+  "params_schema": [
+    {"name": "c1", "type": "int", "default": 128, "min": 1, "description": "输入通道"},
+    {"name": "c2", "type": "int", "default": 128, "min": 1, "description": "输出通道"},
+    {"name": "n", "type": "int", "default": 2, "min": 1, "description": "Bottleneck重复次数（schema固定展开n=2）"},
+    {"name": "shortcut", "type": "bool", "default": true, "description": "是否使用快捷连接"},
+    {"name": "g", "type": "int", "default": 1, "min": 1, "description": "分组卷积组数"},
+    {"name": "e", "type": "float", "default": 0.5, "description": "通道扩展系数"}
+  ],
+  "proxy_inputs": [
+    {"sub_node_id": "cv1", "port_index": 0, "name": "x"}
+  ],
+  "proxy_outputs": [
+    {"sub_node_id": "cv2", "port_index": 0, "name": "out"}
+  ],
+  "sub_nodes": [
+    {"id": "cv1", "type": "Conv2d", "params": {"in_channels": "${c1}", "out_channels": "${int(c2 * e) * 2}", "kernel_size": 1, "bias": false}, "position": {"x": 100, "y": 50}},
+    {"id": "chunk", "type": "Chunk", "params": {"chunks": 2, "dim": 1}, "position": {"x": 100, "y": 130}},
+    {"id": "bn0", "type": "Bottleneck", "params": {"c1": "${int(c2 * e)}", "c2": "${int(c2 * e)}", "shortcut": "${shortcut}", "g": "${g}", "e": 1.0}, "position": {"x": 50, "y": 250}},
+    {"id": "bn1", "type": "Bottleneck", "params": {"c1": "${int(c2 * e)}", "c2": "${int(c2 * e)}", "shortcut": "${shortcut}", "g": "${g}", "e": 1.0}, "position": {"x": 150, "y": 250}},
+    {"id": "concat", "type": "Concat", "params": {"dim": 1}, "position": {"x": 100, "y": 380}},
+    {"id": "cv2", "type": "Conv2d", "params": {"in_channels": "${(2 + 2) * int(c2 * e)}", "out_channels": "${c2}", "kernel_size": 1, "bias": false}, "position": {"x": 100, "y": 480}}
+  ],
+  "sub_edges": [
+    {"source": "cv1", "source_port": 0, "target": "chunk", "target_port": 0},
+    {"source": "chunk", "source_port": 0, "target": "concat", "target_port": 0},
+    {"source": "chunk", "source_port": 1, "target": "bn0", "target_port": 0},
+    {"source": "chunk", "source_port": 1, "target": "concat", "target_port": 1},
+    {"source": "bn0", "source_port": 0, "target": "bn1", "target_port": 0},
+    {"source": "bn0", "source_port": 0, "target": "concat", "target_port": 2},
+    {"source": "bn1", "source_port": 0, "target": "concat", "target_port": 3},
+    {"source": "concat", "source_port": 0, "target": "cv2", "target_port": 0}
+  ]
+}

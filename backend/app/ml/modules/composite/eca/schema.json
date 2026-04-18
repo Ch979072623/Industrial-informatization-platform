@@ -1,0 +1,31 @@
+{
+  "type": "ECA",
+  "category": "attention",
+  "display_name": "高效通道注意力",
+  "is_composite": true,
+  "params_schema": [
+    {"name": "in_channels", "type": "int", "default": 64, "min": 1, "description": "输入通道"},
+    {"name": "gamma", "type": "float", "default": 2.0, "description": "kernel size自适应系数"},
+    {"name": "b", "type": "float", "default": 1.0, "description": "kernel size偏置项"}
+  ],
+  "proxy_inputs": [
+    {"sub_node_id": "identity_in", "port_index": 0, "name": "x"}
+  ],
+  "proxy_outputs": [
+    {"sub_node_id": "mul", "port_index": 0, "name": "out"}
+  ],
+  "sub_nodes": [
+    {"id": "identity_in", "type": "Identity", "params": {}, "position": {"x": 100, "y": 40}},
+    {"id": "gap", "type": "AdaptiveAvgPool2d", "params": {"output_size": 1}, "position": {"x": 50, "y": 120}},
+    {"id": "eca_conv", "type": "ECA_Conv1d", "params": {"in_channels": "${in_channels}", "gamma": "${gamma}", "b": "${b}"}, "position": {"x": 50, "y": 220}},
+    {"id": "sigmoid", "type": "Sigmoid", "params": {}, "position": {"x": 50, "y": 320}},
+    {"id": "mul", "type": "Mul", "params": {}, "position": {"x": 100, "y": 420}}
+  ],
+  "sub_edges": [
+    {"source": "identity_in", "source_port": 0, "target": "gap", "target_port": 0},
+    {"source": "identity_in", "source_port": 0, "target": "mul", "target_port": 0},
+    {"source": "gap", "source_port": 0, "target": "eca_conv", "target_port": 0},
+    {"source": "eca_conv", "source_port": 0, "target": "sigmoid", "target_port": 0},
+    {"source": "sigmoid", "source_port": 0, "target": "mul", "target_port": 1}
+  ]
+}

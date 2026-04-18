@@ -1,0 +1,72 @@
+{
+  "type": "Detect_SASD",
+  "category": "head",
+  "display_name": "尺度自适应共享检测头",
+  "is_composite": true,
+  "params_schema": [
+    {"name": "nc", "type": "int", "default": 80, "min": 1, "description": "检测类别数"},
+    {"name": "hidc", "type": "int", "default": 256, "min": 1, "description": "隐藏通道数"},
+    {"name": "ch", "type": "int[]", "default": [256, 512, 1024], "description": "输入通道列表"},
+    {"name": "reg_max", "type": "int", "default": 16, "min": 1, "description": "DFL reg_max"}
+  ],
+  "proxy_inputs": [
+    {"sub_node_id": "stem_0", "port_index": 0, "name": "n3_in"},
+    {"sub_node_id": "stem_1", "port_index": 0, "name": "n4_in"},
+    {"sub_node_id": "stem_2", "port_index": 0, "name": "n5_in"}
+  ],
+  "proxy_outputs": [
+    {"sub_node_id": "concat_0", "port_index": 0, "name": "cls_reg_3"},
+    {"sub_node_id": "concat_1", "port_index": 0, "name": "cls_reg_4"},
+    {"sub_node_id": "concat_2", "port_index": 0, "name": "cls_reg_5"}
+  ],
+  "sub_nodes": [
+    {"id": "stem_0", "type": "Conv_GN", "params": {"c1": "${ch[0]}", "c2": "${hidc}", "k": 3, "s": 1}, "position": {"x": 50, "y": 80}},
+    {"id": "shared_dw_0", "type": "Conv_GN", "params": {"c1": "${hidc}", "c2": "${hidc}", "k": 3, "s": 1, "g": "${hidc}"}, "position": {"x": 50, "y": 180}},
+    {"id": "shared_pw_0", "type": "Conv_GN", "params": {"c1": "${hidc}", "c2": "${hidc}", "k": 1, "s": 1}, "position": {"x": 50, "y": 280}},
+    {"id": "cv2_0", "type": "Conv2d", "params": {"in_channels": "${hidc}", "out_channels": "${4 * reg_max}", "kernel_size": 1}, "position": {"x": 20, "y": 380}},
+    {"id": "cv3_0", "type": "Conv2d", "params": {"in_channels": "${hidc}", "out_channels": "${nc}", "kernel_size": 1}, "position": {"x": 80, "y": 380}},
+    {"id": "scale_0", "type": "Scale", "params": {"init_value": 1.0}, "position": {"x": 20, "y": 480}},
+    {"id": "concat_0", "type": "Concat", "params": {"dim": 1}, "position": {"x": 50, "y": 580}},
+
+    {"id": "stem_1", "type": "Conv_GN", "params": {"c1": "${ch[1]}", "c2": "${hidc}", "k": 3, "s": 1}, "position": {"x": 250, "y": 80}},
+    {"id": "shared_dw_1", "type": "Conv_GN", "params": {"c1": "${hidc}", "c2": "${hidc}", "k": 3, "s": 1, "g": "${hidc}"}, "position": {"x": 250, "y": 180}},
+    {"id": "shared_pw_1", "type": "Conv_GN", "params": {"c1": "${hidc}", "c2": "${hidc}", "k": 1, "s": 1}, "position": {"x": 250, "y": 280}},
+    {"id": "cv2_1", "type": "Conv2d", "params": {"in_channels": "${hidc}", "out_channels": "${4 * reg_max}", "kernel_size": 1}, "position": {"x": 220, "y": 380}},
+    {"id": "cv3_1", "type": "Conv2d", "params": {"in_channels": "${hidc}", "out_channels": "${nc}", "kernel_size": 1}, "position": {"x": 280, "y": 380}},
+    {"id": "scale_1", "type": "Scale", "params": {"init_value": 1.0}, "position": {"x": 220, "y": 480}},
+    {"id": "concat_1", "type": "Concat", "params": {"dim": 1}, "position": {"x": 250, "y": 580}},
+
+    {"id": "stem_2", "type": "Conv_GN", "params": {"c1": "${ch[2]}", "c2": "${hidc}", "k": 3, "s": 1}, "position": {"x": 450, "y": 80}},
+    {"id": "shared_dw_2", "type": "Conv_GN", "params": {"c1": "${hidc}", "c2": "${hidc}", "k": 3, "s": 1, "g": "${hidc}"}, "position": {"x": 450, "y": 180}},
+    {"id": "shared_pw_2", "type": "Conv_GN", "params": {"c1": "${hidc}", "c2": "${hidc}", "k": 1, "s": 1}, "position": {"x": 450, "y": 280}},
+    {"id": "cv2_2", "type": "Conv2d", "params": {"in_channels": "${hidc}", "out_channels": "${4 * reg_max}", "kernel_size": 1}, "position": {"x": 420, "y": 380}},
+    {"id": "cv3_2", "type": "Conv2d", "params": {"in_channels": "${hidc}", "out_channels": "${nc}", "kernel_size": 1}, "position": {"x": 480, "y": 380}},
+    {"id": "scale_2", "type": "Scale", "params": {"init_value": 1.0}, "position": {"x": 420, "y": 480}},
+    {"id": "concat_2", "type": "Concat", "params": {"dim": 1}, "position": {"x": 450, "y": 580}}
+  ],
+  "sub_edges": [
+    {"source": "stem_0", "source_port": 0, "target": "shared_dw_0", "target_port": 0},
+    {"source": "shared_dw_0", "source_port": 0, "target": "shared_pw_0", "target_port": 0},
+    {"source": "shared_pw_0", "source_port": 0, "target": "cv2_0", "target_port": 0},
+    {"source": "shared_pw_0", "source_port": 0, "target": "cv3_0", "target_port": 0},
+    {"source": "cv2_0", "source_port": 0, "target": "scale_0", "target_port": 0},
+    {"source": "scale_0", "source_port": 0, "target": "concat_0", "target_port": 0},
+    {"source": "cv3_0", "source_port": 0, "target": "concat_0", "target_port": 1},
+
+    {"source": "stem_1", "source_port": 0, "target": "shared_dw_1", "target_port": 0},
+    {"source": "shared_dw_1", "source_port": 0, "target": "shared_pw_1", "target_port": 0},
+    {"source": "shared_pw_1", "source_port": 0, "target": "cv2_1", "target_port": 0},
+    {"source": "shared_pw_1", "source_port": 0, "target": "cv3_1", "target_port": 0},
+    {"source": "cv2_1", "source_port": 0, "target": "scale_1", "target_port": 0},
+    {"source": "scale_1", "source_port": 0, "target": "concat_1", "target_port": 0},
+    {"source": "cv3_1", "source_port": 0, "target": "concat_1", "target_port": 1},
+
+    {"source": "stem_2", "source_port": 0, "target": "shared_dw_2", "target_port": 0},
+    {"source": "shared_dw_2", "source_port": 0, "target": "shared_pw_2", "target_port": 0},
+    {"source": "shared_pw_2", "source_port": 0, "target": "cv2_2", "target_port": 0},
+    {"source": "shared_pw_2", "source_port": 0, "target": "cv3_2", "target_port": 0},
+    {"source": "cv2_2", "source_port": 0, "target": "scale_2", "target_port": 0},
+    {"source": "scale_2", "source_port": 0, "target": "concat_2", "target_port": 0},
+    {"source": "cv3_2", "source_port": 0, "target": "concat_2", "target_port": 1}
+  ]
+}

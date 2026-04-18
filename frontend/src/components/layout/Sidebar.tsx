@@ -14,6 +14,7 @@ import {
   Scissors,
   GraduationCap,
   PlusCircle,
+  Box,
 } from 'lucide-react';
 
 interface NavItem {
@@ -44,9 +45,9 @@ const navItems: NavItem[] = [
   },
   {
     title: '模型构建',
-    href: '/models',
-    icon: <Brain className="h-5 w-5" />,
-    roles: ['admin', 'user'],
+    href: '/admin/model-builder',
+    icon: <Box className="h-5 w-5" />,
+    roles: ['admin'],
   },
   {
     title: '模型训练',

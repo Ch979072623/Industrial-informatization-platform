@@ -1,0 +1,43 @@
+{
+  "type": "FPN",
+  "category": "neck",
+  "display_name": "特征金字塔网络",
+  "is_composite": true,
+  "params_schema": [
+    {"name": "in_channels_list", "type": "int[]", "default": [512, 256, 128], "description": "输入通道列表 [C5,C4,C3]"},
+    {"name": "out_channels", "type": "int", "default": 256, "min": 1, "description": "输出通道"}
+  ],
+  "proxy_inputs": [
+    {"sub_node_id": "lateral_5", "port_index": 0, "name": "p5_in"},
+    {"sub_node_id": "lateral_4", "port_index": 0, "name": "p4_in"},
+    {"sub_node_id": "lateral_3", "port_index": 0, "name": "p3_in"}
+  ],
+  "proxy_outputs": [
+    {"sub_node_id": "fpn_3", "port_index": 0, "name": "n3_out"},
+    {"sub_node_id": "fpn_4", "port_index": 0, "name": "n4_out"},
+    {"sub_node_id": "fpn_5", "port_index": 0, "name": "n5_out"}
+  ],
+  "sub_nodes": [
+    {"id": "lateral_5", "type": "Conv2d", "params": {"in_channels": "${in_channels_list[0]}", "out_channels": "${out_channels}", "kernel_size": 1, "bias": false}, "position": {"x": 350, "y": 50}},
+    {"id": "lateral_4", "type": "Conv2d", "params": {"in_channels": "${in_channels_list[1]}", "out_channels": "${out_channels}", "kernel_size": 1, "bias": false}, "position": {"x": 200, "y": 50}},
+    {"id": "lateral_3", "type": "Conv2d", "params": {"in_channels": "${in_channels_list[2]}", "out_channels": "${out_channels}", "kernel_size": 1, "bias": false}, "position": {"x": 50, "y": 50}},
+    {"id": "upsample_5to4", "type": "Upsample", "params": {"scale_factor": 2, "mode": "nearest"}, "position": {"x": 350, "y": 150}},
+    {"id": "add_4", "type": "Add", "params": {}, "position": {"x": 200, "y": 250}},
+    {"id": "upsample_4to3", "type": "Upsample", "params": {"scale_factor": 2, "mode": "nearest"}, "position": {"x": 200, "y": 350}},
+    {"id": "add_3", "type": "Add", "params": {}, "position": {"x": 50, "y": 450}},
+    {"id": "fpn_3", "type": "Conv2d", "params": {"in_channels": "${out_channels}", "out_channels": "${out_channels}", "kernel_size": 3, "padding": 1, "bias": false}, "position": {"x": 50, "y": 550}},
+    {"id": "fpn_4", "type": "Conv2d", "params": {"in_channels": "${out_channels}", "out_channels": "${out_channels}", "kernel_size": 3, "padding": 1, "bias": false}, "position": {"x": 200, "y": 550}},
+    {"id": "fpn_5", "type": "Conv2d", "params": {"in_channels": "${out_channels}", "out_channels": "${out_channels}", "kernel_size": 3, "padding": 1, "bias": false}, "position": {"x": 350, "y": 550}}
+  ],
+  "sub_edges": [
+    {"source": "lateral_5", "source_port": 0, "target": "upsample_5to4", "target_port": 0},
+    {"source": "lateral_5", "source_port": 0, "target": "fpn_5", "target_port": 0},
+    {"source": "lateral_4", "source_port": 0, "target": "add_4", "target_port": 0},
+    {"source": "upsample_5to4", "source_port": 0, "target": "add_4", "target_port": 1},
+    {"source": "add_4", "source_port": 0, "target": "upsample_4to3", "target_port": 0},
+    {"source": "add_4", "source_port": 0, "target": "fpn_4", "target_port": 0},
+    {"source": "lateral_3", "source_port": 0, "target": "add_3", "target_port": 0},
+    {"source": "upsample_4to3", "source_port": 0, "target": "add_3", "target_port": 1},
+    {"source": "add_3", "source_port": 0, "target": "fpn_3", "target_port": 0}
+  ]
+}

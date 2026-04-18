@@ -1,0 +1,15 @@
+{
+  "type": "Split",
+  "category": "atomic",
+  "display_name": "通道划分",
+  "is_composite": false,
+  "params_schema": [
+    {"name": "n_splits", "type": "int", "default": 2, "min": 2, "description": "划分段数"},
+    {"name": "dim", "type": "int", "default": 1, "description": "划分维度"}
+  ],
+  "input_ports": [{"name": "input", "type": "tensor"}],
+  "output_ports": [
+    {"name": "out_0", "type": "tensor"},
+    {"name": "out_1", "type": "tensor"}
+  ]
+}

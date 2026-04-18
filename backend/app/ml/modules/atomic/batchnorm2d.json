@@ -1,0 +1,13 @@
+{
+  "type": "BatchNorm2d",
+  "category": "atomic",
+  "display_name": "批量归一化",
+  "is_composite": false,
+  "params_schema": [
+    {"name": "num_features", "type": "int", "default": 64, "min": 1, "description": "特征数量（通道数）"},
+    {"name": "eps", "type": "float", "default": 1e-05, "description": "防止除零的epsilon"},
+    {"name": "momentum", "type": "float", "default": 0.1, "description": "动量"}
+  ],
+  "input_ports": [{"name": "input", "type": "tensor"}],
+  "output_ports": [{"name": "output", "type": "tensor"}]
+}

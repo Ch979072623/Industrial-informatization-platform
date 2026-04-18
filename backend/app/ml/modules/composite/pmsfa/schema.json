@@ -1,0 +1,39 @@
+{
+  "type": "PMSFA",
+  "category": "backbone",
+  "display_name": "并行多尺度特征聚合",
+  "is_composite": true,
+  "params_schema": [
+    {"name": "inc", "type": "int", "default": 64, "min": 1, "description": "输入=输出通道数，必须能被4整除"}
+  ],
+  "proxy_inputs": [
+    {"sub_node_id": "identity", "port_index": 0, "name": "x"}
+  ],
+  "proxy_outputs": [
+    {"sub_node_id": "add", "port_index": 0, "name": "out"}
+  ],
+  "sub_nodes": [
+    {"id": "identity", "type": "Identity", "params": {}, "position": {"x": 100, "y": 40}},
+    {"id": "conv_3x3", "type": "Conv2d", "params": {"in_channels": "${inc}", "out_channels": "${inc}", "kernel_size": 3, "padding": 1, "bias": false}, "position": {"x": 100, "y": 120}},
+    {"id": "chunk_1", "type": "Chunk", "params": {"chunks": 2, "dim": 1}, "position": {"x": 100, "y": 200}},
+    {"id": "conv_5x5", "type": "Conv2d", "params": {"in_channels": "${inc // 2}", "out_channels": "${inc // 2}", "kernel_size": 5, "padding": 2, "groups": "${inc // 2}", "bias": false}, "position": {"x": 50, "y": 300}},
+    {"id": "chunk_2", "type": "Chunk", "params": {"chunks": 2, "dim": 1}, "position": {"x": 50, "y": 380}},
+    {"id": "conv_7x7", "type": "Conv2d", "params": {"in_channels": "${inc // 4}", "out_channels": "${inc // 4}", "kernel_size": 7, "padding": 3, "groups": "${inc // 4}", "bias": false}, "position": {"x": 20, "y": 480}},
+    {"id": "concat", "type": "Concat", "params": {"dim": 1}, "position": {"x": 150, "y": 480}},
+    {"id": "conv_1x1", "type": "Conv2d", "params": {"in_channels": "${inc}", "out_channels": "${inc}", "kernel_size": 1, "bias": false}, "position": {"x": 150, "y": 560}},
+    {"id": "add", "type": "Add", "params": {}, "position": {"x": 150, "y": 640}}
+  ],
+  "sub_edges": [
+    {"source": "identity", "source_port": 0, "target": "conv_3x3", "target_port": 0},
+    {"source": "identity", "source_port": 0, "target": "add", "target_port": 1},
+    {"source": "conv_3x3", "source_port": 0, "target": "chunk_1", "target_port": 0},
+    {"source": "chunk_1", "source_port": 0, "target": "conv_5x5", "target_port": 0},
+    {"source": "chunk_1", "source_port": 1, "target": "concat", "target_port": 2},
+    {"source": "conv_5x5", "source_port": 0, "target": "chunk_2", "target_port": 0},
+    {"source": "chunk_2", "source_port": 0, "target": "conv_7x7", "target_port": 0},
+    {"source": "chunk_2", "source_port": 1, "target": "concat", "target_port": 1},
+    {"source": "conv_7x7", "source_port": 0, "target": "concat", "target_port": 0},
+    {"source": "concat", "source_port": 0, "target": "conv_1x1", "target_port": 0},
+    {"source": "conv_1x1", "source_port": 0, "target": "add", "target_port": 0}
+  ]
+}

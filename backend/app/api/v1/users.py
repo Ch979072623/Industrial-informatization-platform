@@ -6,14 +6,18 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, require_admin, get_current_user
+from app.api.deps import get_db, get_current_user
 from app.services.auth_service import AuthService
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.schemas.common import APIResponse, PaginatedResponse, PaginationParams
 from app.models.user import User
-from app.core.security import TokenData
+from app.core.security import TokenData, require_roles
 
-router = APIRouter(prefix="/users", tags=["用户管理"], dependencies=[require_admin])
+router = APIRouter(
+    prefix="/users", 
+    tags=["用户管理"], 
+    dependencies=[Depends(require_roles(["admin"]))]
+)
 
 
 @router.get("", response_model=APIResponse[PaginatedResponse[UserResponse]])

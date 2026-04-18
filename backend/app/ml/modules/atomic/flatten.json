@@ -1,0 +1,12 @@
+{
+  "type": "Flatten",
+  "category": "atomic",
+  "display_name": "展平",
+  "is_composite": false,
+  "params_schema": [
+    {"name": "start_dim", "type": "int", "default": 1, "description": "起始维度"},
+    {"name": "end_dim", "type": "int", "default": -1, "description": "结束维度"}
+  ],
+  "input_ports": [{"name": "input", "type": "tensor"}],
+  "output_ports": [{"name": "output", "type": "tensor"}]
+}

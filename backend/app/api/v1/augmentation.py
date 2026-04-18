@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from celery.result import AsyncResult
 
-from app.api.deps import get_db, get_current_user, require_admin
+from app.api.deps import get_db, get_current_user
 from app.core.security import TokenData
 from app.core.config import settings
 from app.schemas.common import APIResponse, PaginatedResponse, PaginationParams

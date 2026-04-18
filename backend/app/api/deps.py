@@ -69,8 +69,14 @@ async def get_current_user(
 
 
 # 角色权限依赖
-require_admin = Depends(require_roles(["admin"]))
-require_user = Depends(require_roles(["user", "admin"]))
+def require_admin():
+    """要求管理员权限"""
+    return Depends(require_roles(["admin"]))
+
+
+def require_user():
+    """要求用户权限（普通用户或管理员）"""
+    return Depends(require_roles(["user", "admin"]))
 
 
 def require_production_line_access():

@@ -1,0 +1,11 @@
+{
+  "type": "Scale",
+  "category": "atomic",
+  "display_name": "可学习缩放",
+  "is_composite": false,
+  "params_schema": [
+    {"name": "init_value", "type": "float", "default": 1.0, "description": "缩放因子初始值"}
+  ],
+  "input_ports": [{"name": "input", "type": "tensor"}],
+  "output_ports": [{"name": "output", "type": "tensor"}]
+}

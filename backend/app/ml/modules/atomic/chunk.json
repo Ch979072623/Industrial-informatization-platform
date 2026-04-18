@@ -1,0 +1,15 @@
+{
+  "type": "Chunk",
+  "category": "atomic",
+  "display_name": "通道分块",
+  "is_composite": false,
+  "params_schema": [
+    {"name": "chunks", "type": "int", "default": 2, "min": 2, "description": "分块份数（按份数分，区别于Split按大小分）"},
+    {"name": "dim", "type": "int", "default": 1, "description": "分块维度"}
+  ],
+  "input_ports": [{"name": "input", "type": "tensor"}],
+  "output_ports": [
+    {"name": "out_0", "type": "tensor"},
+    {"name": "out_1", "type": "tensor"}
+  ]
+}

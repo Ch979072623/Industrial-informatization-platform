@@ -1,0 +1,14 @@
+{
+  "type": "Concat",
+  "category": "atomic",
+  "display_name": "通道拼接",
+  "is_composite": false,
+  "params_schema": [
+    {"name": "dim", "type": "int", "default": 1, "description": "拼接维度"}
+  ],
+  "input_ports": [
+    {"name": "in_0", "type": "tensor"},
+    {"name": "in_1", "type": "tensor"}
+  ],
+  "output_ports": [{"name": "output", "type": "tensor"}]
+}

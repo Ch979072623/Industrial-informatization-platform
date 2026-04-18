@@ -1,0 +1,32 @@
+{
+  "type": "ADown",
+  "category": "atomic",
+  "display_name": "ADown下采样",
+  "is_composite": true,
+  "params_schema": [
+    {"name": "c1", "type": "int", "default": 128, "min": 1, "description": "输入通道"},
+    {"name": "c2", "type": "int", "default": 128, "min": 1, "description": "输出通道"}
+  ],
+  "proxy_inputs": [
+    {"sub_node_id": "avgpool", "port_index": 0, "name": "x"}
+  ],
+  "proxy_outputs": [
+    {"sub_node_id": "concat", "port_index": 0, "name": "out"}
+  ],
+  "sub_nodes": [
+    {"id": "avgpool", "type": "AvgPool2d", "params": {"kernel_size": 2, "stride": 1, "padding": 0, "ceil_mode": false, "count_include_pad": true}, "position": {"x": 100, "y": 50}},
+    {"id": "chunk", "type": "Chunk", "params": {"chunks": 2, "dim": 1}, "position": {"x": 100, "y": 130}},
+    {"id": "cv1", "type": "Conv2d", "params": {"in_channels": "${c1 // 2}", "out_channels": "${c2 // 2}", "kernel_size": 3, "stride": 2, "padding": 1, "bias": false}, "position": {"x": 50, "y": 250}},
+    {"id": "maxpool", "type": "MaxPool2d", "params": {"kernel_size": 3, "stride": 2, "padding": 1}, "position": {"x": 150, "y": 250}},
+    {"id": "cv2", "type": "Conv2d", "params": {"in_channels": "${c1 // 2}", "out_channels": "${c2 // 2}", "kernel_size": 1, "bias": false}, "position": {"x": 150, "y": 330}},
+    {"id": "concat", "type": "Concat", "params": {"dim": 1}, "position": {"x": 100, "y": 420}}
+  ],
+  "sub_edges": [
+    {"source": "avgpool", "source_port": 0, "target": "chunk", "target_port": 0},
+    {"source": "chunk", "source_port": 0, "target": "cv1", "target_port": 0},
+    {"source": "chunk", "source_port": 1, "target": "maxpool", "target_port": 0},
+    {"source": "maxpool", "source_port": 0, "target": "cv2", "target_port": 0},
+    {"source": "cv1", "source_port": 0, "target": "concat", "target_port": 0},
+    {"source": "cv2", "source_port": 0, "target": "concat", "target_port": 1}
+  ]
+}
