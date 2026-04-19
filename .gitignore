@@ -52,7 +52,7 @@ models/
 *.pth
 *.pt
 *.onnx
-
+docs/
 # Logs
 *.log
 logs/
