@@ -36,6 +36,9 @@ interface ModelBuilderState {
   canUndo: () => boolean;
   canRedo: () => boolean;
   clearCanvas: () => void;
+
+  toggleCollapse: (nodeId: string) => void;
+  markSubLoaded: (nodeId: string) => void;
 }
 
 const MAX_HISTORY = 20;
@@ -119,11 +122,58 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
           history: [],
           historyIndex: -1,
         }),
+
+      toggleCollapse: (nodeId) =>
+        set((state) => {
+          const targetNode = state.nodes.find((n) => n.id === nodeId);
+          if (!targetNode || targetNode.data.isComposite !== true) {
+            return state;
+          }
+          return {
+            nodes: state.nodes.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      collapsed: n.data.collapsed === false,
+                    },
+                  }
+                : n
+            ),
+          };
+        }),
+
+      markSubLoaded: (nodeId) =>
+        set((state) => {
+          const targetNode = state.nodes.find((n) => n.id === nodeId);
+          if (!targetNode) {
+            return state;
+          }
+          return {
+            nodes: state.nodes.map((n) =>
+              n.id === nodeId
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      subLoaded: true,
+                    },
+                  }
+                : n
+            ),
+          };
+        }),
     }),
     {
       name: 'model-builder-draft',
       partialize: (state) => ({
-        nodes: state.nodes,
+        nodes: state.nodes.map((n) => {
+          const { collapsed: _c, subLoaded: _s, ...rest } = n.data;
+          void _c;
+          void _s;
+          return { ...n, data: rest };
+        }),
         edges: state.edges,
       }),
     }

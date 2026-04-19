@@ -121,6 +121,12 @@ export interface ModelNodeData {
   icon?: string;
   /** 是否为复合模块 */
   isComposite?: boolean;
+
+  /** 运行时状态：复合节点是否折叠。undefined 视为 true（默认折叠）。不持久化。 */
+  collapsed?: boolean;
+
+  /** 运行时状态：该复合节点的完整 schema（含 sub_nodes/sub_edges）是否已加载。undefined 视为 false。不持久化。 */
+  subLoaded?: boolean;
 }
 
 export interface ModelNode {
