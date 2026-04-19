@@ -60,7 +60,7 @@ docs/private/
 # 公开文档白名单
 !docs/backlog.md
 !docs/qa-scripts.md
-!docs/phase-4b-cleanup-summary.md
+# !docs/phase-4b-cleanup-summary.md
 !docs/model-builder-architecture.md
 
 # Logs

@@ -5,6 +5,7 @@
  * 1. 画布 nodes/edges 唯一真相源（单向数据流）
  * 2. persist middleware 自动同步到 localStorage（防刷新丢失）
  * 3. 支持撤销/重做历史
+ * 4. 模块 schema 运行时缓存（不持久化）
  *
  * React Flow 官方推荐模式：
  * https://reactflow.dev/learn/advanced-use/state-management
@@ -12,7 +13,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { applyNodeChanges, applyEdgeChanges, type NodeChange, type EdgeChange } from '@xyflow/react';
-import type { RFNode, RFEdge } from '@/types/mlModule';
+import { mlModuleApi } from '@/services/api';
+import type { RFNode, RFEdge, ModuleSchemaDetail, SubNode, SubEdge } from '@/types/mlModule';
 
 interface ModelBuilderState {
   nodes: RFNode[];
@@ -20,6 +22,11 @@ interface ModelBuilderState {
   selectedNodeId: string | null;
   history: { nodes: RFNode[]; edges: RFEdge[] }[];
   historyIndex: number;
+
+  /** 模块 schema 运行时缓存（key = moduleType） */
+  moduleSchemas: Record<string, ModuleSchemaDetail>;
+  moduleSchemaLoading: Record<string, boolean>;
+  moduleSchemaError: Record<string, string | null>;
 
   /** React Flow 内部变化（拖动、选中、删除等）——走 applyChanges */
   onNodesChange: (changes: NodeChange[]) => void;
@@ -39,6 +46,9 @@ interface ModelBuilderState {
 
   toggleCollapse: (nodeId: string) => void;
   markSubLoaded: (nodeId: string) => void;
+
+  getOrLoadModuleSchema: (moduleType: string) => Promise<ModuleSchemaDetail | null>;
+  clearModuleSchemaError: (moduleType: string) => void;
 }
 
 const MAX_HISTORY = 20;
@@ -51,6 +61,9 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
       selectedNodeId: null,
       history: [],
       historyIndex: -1,
+      moduleSchemas: {},
+      moduleSchemaLoading: {},
+      moduleSchemaError: {},
 
       onNodesChange: (changes) =>
         set((state) => ({
@@ -164,6 +177,49 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
             ),
           };
         }),
+
+      getOrLoadModuleSchema: async (moduleType) => {
+        const state = get();
+        const cached = state.moduleSchemas[moduleType];
+        if (cached) {
+          return cached;
+        }
+
+        set((s) => ({
+          moduleSchemaLoading: { ...s.moduleSchemaLoading, [moduleType]: true },
+        }));
+
+        try {
+          const response = await mlModuleApi.getModule(moduleType);
+          const detail = response.data.data;
+          const { schema_json, ...rest } = detail;
+          const schema: ModuleSchemaDetail = {
+            ...rest,
+            sub_nodes: schema_json?.sub_nodes as SubNode[] | undefined,
+            sub_edges: schema_json?.sub_edges as SubEdge[] | undefined,
+          };
+
+          set((s) => ({
+            moduleSchemas: { ...s.moduleSchemas, [moduleType]: schema },
+            moduleSchemaLoading: { ...s.moduleSchemaLoading, [moduleType]: false },
+            moduleSchemaError: { ...s.moduleSchemaError, [moduleType]: null },
+          }));
+
+          return schema;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : '加载失败';
+          set((s) => ({
+            moduleSchemaLoading: { ...s.moduleSchemaLoading, [moduleType]: false },
+            moduleSchemaError: { ...s.moduleSchemaError, [moduleType]: message },
+          }));
+          return null;
+        }
+      },
+
+      clearModuleSchemaError: (moduleType) =>
+        set((s) => ({
+          moduleSchemaError: { ...s.moduleSchemaError, [moduleType]: null },
+        })),
     }),
     {
       name: 'model-builder-draft',

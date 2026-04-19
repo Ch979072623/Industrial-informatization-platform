@@ -45,6 +45,25 @@ export interface ParamSchema {
   description?: string;
 }
 
+// ==================== 子图节点和边 ====================
+
+export interface SubNode {
+  id: string;
+  type: string;
+  params: Record<string, unknown>;
+  position: {
+    x: number;
+    y: number;
+  };
+}
+
+export interface SubEdge {
+  source: string;
+  source_port: number;
+  target: string;
+  target_port: number;
+}
+
 // ==================== 代理端口 ====================
 
 export interface ProxyPort {
@@ -95,11 +114,18 @@ export interface ModuleDefinitionDetail extends ModuleDefinition {
     params_schema: ParamSchema[];
     proxy_inputs: ProxyPort[];
     proxy_outputs: ProxyPort[];
-    sub_nodes?: unknown[];
-    sub_edges?: unknown[];
+    sub_nodes?: SubNode[];
+    sub_edges?: SubEdge[];
   };
   created_at?: string;
   updated_at?: string;
+}
+
+// ==================== 模块 schema 缓存（扁平化，不含 schema_json 嵌套） ====================
+
+export interface ModuleSchemaDetail extends ModuleDefinition {
+  sub_nodes?: SubNode[];
+  sub_edges?: SubEdge[];
 }
 
 // ==================== 模型架构节点和边 ====================

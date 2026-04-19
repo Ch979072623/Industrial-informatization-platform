@@ -6,9 +6,10 @@
  * 2. 显示输入端口（左侧）和输出端口（右侧）
  * 3. 选中状态边框
  * 4. 折叠态：参数摘要 + Maximize2 图标
- * 5. 展开态：虚线边框容器 + 占位区域 + Minimize2 图标
+ * 5. 展开态：虚线边框容器 + 子画布（loading/error/success 三态）+ Minimize2 图标
  * 6. 双击标题栏切换折叠/展开
  */
+import { useEffect, useMemo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { 
   Box, 
@@ -29,7 +30,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useModelBuilderStore } from '@/stores/modelBuilderStore';
-import type { ModelNodeData, PortDefinition } from '@/types/mlModule';
+import type { ModelNodeData, PortDefinition, SubNode, SubEdge, ModuleSchemaDetail } from '@/types/mlModule';
+import ChildAtomicNode from './ChildAtomicNode';
 
 // 图标映射
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -48,6 +50,83 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Shrink,
 };
 
+const CHILD_NODE_WIDTH = 100;
+const CHILD_NODE_HEIGHT = 60;
+
+function computeBounds(subNodes: SubNode[]) {
+  if (subNodes.length === 0) return { width: 200, height: 200 };
+  const maxX = Math.max(...subNodes.map((n) => n.position.x));
+  const maxY = Math.max(...subNodes.map((n) => n.position.y));
+  return {
+    width: maxX + CHILD_NODE_WIDTH + 20,
+    height: maxY + CHILD_NODE_HEIGHT + 20,
+  };
+}
+
+function SubEdgeLine({ edge, subNodes }: { edge: SubEdge; subNodes: SubNode[] }) {
+  const source = subNodes.find((n) => n.id === edge.source);
+  const target = subNodes.find((n) => n.id === edge.target);
+  if (!source || !target) return null;
+
+  const sx = source.position.x + CHILD_NODE_WIDTH;
+  const sy = source.position.y + CHILD_NODE_HEIGHT / 2;
+  const tx = target.position.x;
+  const ty = target.position.y + CHILD_NODE_HEIGHT / 2;
+
+  return (
+    <path
+      d={`M ${sx} ${sy} C ${sx + 40} ${sy}, ${tx - 40} ${ty}, ${tx} ${ty}`}
+      stroke="#9ca3af"
+      strokeWidth="1.5"
+      fill="none"
+    />
+  );
+}
+
+function SubGraphView({ schema }: { schema: ModuleSchemaDetail }) {
+  const raw_sub_nodes = schema.sub_nodes || [];
+  const sub_edges = schema.sub_edges || [];
+
+  // 横向化：把 Phase 4a schema 的纵向坐标 (x,y) 转置为 (y,x)
+  // 原因：外部端口在左右两侧暗示横向数据流，但 schema 的 position 是纵向布局。
+  // 纯前端转置，不改 schema 本身。
+  const sub_nodes = useMemo(
+    () =>
+      raw_sub_nodes.map((n) => ({
+        ...n,
+        position: { x: n.position.y, y: n.position.x },
+      })),
+    [raw_sub_nodes]
+  );
+
+  const bounds = computeBounds(sub_nodes);
+
+  return (
+    <div
+      className="relative"
+      style={{ width: bounds.width, height: bounds.height }}
+      data-testid="subgraph-view"
+    >
+      <svg
+        className="absolute top-0 left-0 pointer-events-none"
+        width={bounds.width}
+        height={bounds.height}
+      >
+        {sub_edges.map((edge) => (
+          <SubEdgeLine
+            key={`${edge.source}-${edge.target}-${edge.source_port}-${edge.target_port}`}
+            edge={edge}
+            subNodes={sub_nodes}
+          />
+        ))}
+      </svg>
+      {sub_nodes.map((subNode) => (
+        <ChildAtomicNode key={subNode.id} subNode={subNode} />
+      ))}
+    </div>
+  );
+}
+
 export default function CompositeNode({ 
   id,
   data: _data,
@@ -65,7 +144,14 @@ export default function CompositeNode({
   } = data;
 
   const toggleCollapse = useModelBuilderStore((state) => state.toggleCollapse);
+  const getOrLoadModuleSchema = useModelBuilderStore((state) => state.getOrLoadModuleSchema);
+  const clearModuleSchemaError = useModelBuilderStore((state) => state.clearModuleSchemaError);
+  const moduleSchemas = useModelBuilderStore((state) => state.moduleSchemas);
+  const moduleSchemaLoading = useModelBuilderStore((state) => state.moduleSchemaLoading);
+  const moduleSchemaError = useModelBuilderStore((state) => state.moduleSchemaError);
+
   const isExpanded = data.collapsed === false;
+  const moduleType = data.moduleType;
 
   // 获取图标组件
   const IconComponent = ICON_MAP[icon || 'Box'] || Box;
@@ -80,6 +166,24 @@ export default function CompositeNode({
 
   // 获取前3个参数用于显示
   const paramEntries = Object.entries(parameters || {}).slice(0, 3);
+
+  // 展开时触发 schema 懒加载
+  useEffect(() => {
+    if (isExpanded && moduleType) {
+      const state = useModelBuilderStore.getState();
+      if (
+        !state.moduleSchemas[moduleType] &&
+        !state.moduleSchemaLoading[moduleType] &&
+        !state.moduleSchemaError[moduleType]
+      ) {
+        state.getOrLoadModuleSchema(moduleType).then((schema) => {
+          if (schema) {
+            state.markSubLoaded(id);
+          }
+        });
+      }
+    }
+  }, [isExpanded, moduleType, id]);
 
   return (
     <div
@@ -181,15 +285,64 @@ export default function CompositeNode({
         </div>
       )}
 
-      {/* 展开态：占位区域 */}
+      {/* 展开态：子画布区域 */}
       {isExpanded && (
-        <div 
-          className="flex-1 flex items-center justify-center px-3 pb-3"
-          data-testid="composite-expanded-placeholder"
+        <div
+          className="flex-1 flex flex-col overflow-auto"
+          style={{ maxHeight: 400 }}
+          data-testid="composite-children"
         >
-          <p className="text-sm text-muted-foreground">
-            子节点将在此渲染（A-3c）
-          </p>
+          {(() => {
+            const schema = moduleSchemas[moduleType];
+            const loading = moduleSchemaLoading[moduleType];
+            const error = moduleSchemaError[moduleType];
+
+            if (loading) {
+              return (
+                <div
+                  className="flex-1 flex items-center justify-center py-4"
+                  data-testid="composite-loading"
+                >
+                  <div className="animate-spin h-5 w-5 border-2 border-primary border-t-transparent rounded-full" />
+                  <span className="ml-2 text-sm text-muted-foreground">加载中...</span>
+                </div>
+              );
+            }
+
+            if (error) {
+              return (
+                <div
+                  className="flex-1 flex flex-col items-center justify-center py-4 gap-2"
+                  data-testid="composite-error"
+                >
+                  <span className="text-sm text-destructive">加载失败：{error}</span>
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded border hover:bg-muted"
+                    onClick={() => {
+                      clearModuleSchemaError(moduleType);
+                      getOrLoadModuleSchema(moduleType);
+                    }}
+                  >
+                    重试
+                  </button>
+                </div>
+              );
+            }
+
+            if (!schema || !schema.sub_nodes) {
+              return (
+                <div
+                  className="flex-1 flex items-center justify-center py-4 text-sm text-muted-foreground"
+                  data-testid="composite-empty"
+                >
+                  暂无子节点信息
+                </div>
+              );
+            }
+
+            return <SubGraphView schema={schema} />;
+          })()}
         </div>
       )}
 

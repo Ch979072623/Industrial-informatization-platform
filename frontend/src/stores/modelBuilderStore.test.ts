@@ -1,6 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { mlModuleApi } from '@/services/api';
 import { useModelBuilderStore } from './modelBuilderStore';
-import type { RFNode } from '@/types/mlModule';
+import type { RFNode, ModuleSchemaDetail, ModuleDefinitionDetail } from '@/types/mlModule';
+
+vi.mock('@/services/api', () => ({
+  mlModuleApi: {
+    getModule: vi.fn(),
+  },
+}));
 
 function makeNode(
   id: string,
@@ -35,7 +42,11 @@ describe('modelBuilderStore actions', () => {
       selectedNodeId: null,
       history: [],
       historyIndex: -1,
+      moduleSchemas: {},
+      moduleSchemaLoading: {},
+      moduleSchemaError: {},
     });
+    vi.mocked(mlModuleApi.getModule).mockClear();
   });
 
   it('toggleCollapse 对 composite 节点正确翻转 collapsed', () => {
@@ -95,5 +106,74 @@ describe('modelBuilderStore actions', () => {
     expect(persisted.state.nodes[0].data.collapsed).toBeUndefined();
     expect(persisted.state.nodes[0].data.subLoaded).toBeUndefined();
     expect(persisted.state.nodes[0].data.isComposite).toBe(true);
+  });
+
+  it('getOrLoadModuleSchema 缓存命中返回 cached，不走 API', async () => {
+    const schema: ModuleSchemaDetail = {
+      id: 'test-mod',
+      type: 'TestMod',
+      display_name: '测试模块',
+      category: 'atomic',
+      is_composite: false,
+      source: 'builtin',
+      version: 1,
+      params_schema: [],
+      proxy_inputs: [],
+      proxy_outputs: [],
+    };
+    useModelBuilderStore.setState({ moduleSchemas: { TestMod: schema } });
+    const store = useModelBuilderStore.getState();
+    const result = await store.getOrLoadModuleSchema('TestMod');
+    expect(result).toEqual(schema);
+    expect(mlModuleApi.getModule).not.toHaveBeenCalled();
+  });
+
+  it('getOrLoadModuleSchema 缓存 miss 时调 API 且写入缓存', async () => {
+    const detail: ModuleDefinitionDetail = {
+      id: 'pmsfa',
+      type: 'PMSFA',
+      display_name: 'PMSFA',
+      category: 'backbone',
+      is_composite: true,
+      source: 'builtin',
+      version: 1,
+      params_schema: [],
+      proxy_inputs: [],
+      proxy_outputs: [],
+      schema_json: {
+        type: 'PMSFA',
+        category: 'backbone',
+        display_name: 'PMSFA',
+        is_composite: true,
+        params_schema: [],
+        proxy_inputs: [],
+        proxy_outputs: [],
+        sub_nodes: [{ id: 'n1', type: 'Conv2d', params: {}, position: { x: 0, y: 0 } }],
+        sub_edges: [],
+      },
+    };
+    vi.mocked(mlModuleApi.getModule).mockResolvedValue({
+      data: { success: true, data: detail },
+    } as unknown as Awaited<ReturnType<typeof mlModuleApi.getModule>>);
+
+    const store = useModelBuilderStore.getState();
+    const result = await store.getOrLoadModuleSchema('PMSFA');
+
+    expect(mlModuleApi.getModule).toHaveBeenCalledWith('PMSFA');
+    expect(result).toBeTruthy();
+    expect(useModelBuilderStore.getState().moduleSchemas['PMSFA']).toBeTruthy();
+    expect(useModelBuilderStore.getState().moduleSchemaLoading['PMSFA']).toBe(false);
+  });
+
+  it('getOrLoadModuleSchema API 失败时设置 error state', async () => {
+    vi.mocked(mlModuleApi.getModule).mockRejectedValue(new Error('Network Error'));
+
+    const store = useModelBuilderStore.getState();
+    const result = await store.getOrLoadModuleSchema('PMSFA');
+
+    expect(result).toBeNull();
+    expect(useModelBuilderStore.getState().moduleSchemaError['PMSFA']).toBe('Network Error');
+    expect(useModelBuilderStore.getState().moduleSchemaLoading['PMSFA']).toBe(false);
+    expect(useModelBuilderStore.getState().moduleSchemas['PMSFA']).toBeUndefined();
   });
 });
