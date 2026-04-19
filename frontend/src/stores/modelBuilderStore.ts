@@ -49,6 +49,10 @@ interface ModelBuilderState {
 
   getOrLoadModuleSchema: (moduleType: string) => Promise<ModuleSchemaDetail | null>;
   clearModuleSchemaError: (moduleType: string) => void;
+
+  /** React Flow updateNodeInternals 函数引用（由 ModelCanvas 注入，不持久化） */
+  updateNodeInternalsRef: ((nodeId: string) => void) | null;
+  setUpdateNodeInternalsRef: (ref: ((nodeId: string) => void) | null) => void;
 }
 
 const MAX_HISTORY = 20;
@@ -64,6 +68,7 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
       moduleSchemas: {},
       moduleSchemaLoading: {},
       moduleSchemaError: {},
+      updateNodeInternalsRef: null,
 
       onNodesChange: (changes) =>
         set((state) => ({
@@ -136,12 +141,21 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
           historyIndex: -1,
         }),
 
+      setUpdateNodeInternalsRef: (ref) =>
+        set({ updateNodeInternalsRef: ref }),
+
       toggleCollapse: (nodeId) =>
         set((state) => {
           const targetNode = state.nodes.find((n) => n.id === nodeId);
           if (!targetNode || targetNode.data.isComposite !== true) {
             return state;
           }
+
+          const ref = state.updateNodeInternalsRef;
+          if (ref) {
+            queueMicrotask(() => ref(nodeId));
+          }
+
           return {
             nodes: state.nodes.map((n) =>
               n.id === nodeId

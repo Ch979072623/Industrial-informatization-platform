@@ -45,6 +45,7 @@ describe('modelBuilderStore actions', () => {
       moduleSchemas: {},
       moduleSchemaLoading: {},
       moduleSchemaError: {},
+      updateNodeInternalsRef: null,
     });
     vi.mocked(mlModuleApi.getModule).mockClear();
   });
@@ -79,6 +80,49 @@ describe('modelBuilderStore actions', () => {
     store.toggleCollapse('missing');
     const after = useModelBuilderStore.getState().nodes;
     expect(after).toEqual(before);
+  });
+
+  it('toggleCollapse 会通过 updateNodeInternalsRef 通知 React Flow', async () => {
+    const mockUpdate = vi.fn();
+    const store = useModelBuilderStore.getState();
+    store.setUpdateNodeInternalsRef(mockUpdate);
+    store.setNodes([makeNode('test-composite', true)]);
+
+    store.toggleCollapse('test-composite');
+
+    // 等待 queueMicrotask 执行
+    await Promise.resolve();
+
+    expect(mockUpdate).toHaveBeenCalledWith('test-composite');
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+
+    store.setUpdateNodeInternalsRef(null);
+  });
+
+  it('toggleCollapse 对 atomic 节点不触发 updateNodeInternals', async () => {
+    const mockUpdate = vi.fn();
+    const store = useModelBuilderStore.getState();
+    store.setUpdateNodeInternalsRef(mockUpdate);
+    store.setNodes([makeNode('test-atomic', false)]);
+
+    store.toggleCollapse('test-atomic');
+    await Promise.resolve();
+
+    expect(mockUpdate).not.toHaveBeenCalled();
+
+    store.setUpdateNodeInternalsRef(null);
+  });
+
+  it('toggleCollapse 不触发 saveHistory（纯视觉操作不进 undo 栈）', () => {
+    const saveHistorySpy = vi.spyOn(useModelBuilderStore.getState(), 'saveHistory');
+
+    const store = useModelBuilderStore.getState();
+    store.setNodes([makeNode('test-composite', true)]);
+
+    store.toggleCollapse('test-composite');
+
+    expect(saveHistorySpy).not.toHaveBeenCalled();
+    saveHistorySpy.mockRestore();
   });
 
   it('markSubLoaded 单向置 true', () => {

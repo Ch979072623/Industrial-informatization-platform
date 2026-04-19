@@ -19,6 +19,7 @@ import {
   MiniMap,
   useReactFlow,
   ReactFlowProvider,
+  useUpdateNodeInternals,
   type Connection,
   type Node,
   type NodeProps,
@@ -97,6 +98,14 @@ function ModelCanvasInner({
   const redo = useModelBuilderStore((s) => s.redo);
   const canUndo = useModelBuilderStore((s) => s.canUndo);
   const canRedo = useModelBuilderStore((s) => s.canRedo);
+  const setUpdateNodeInternalsRef = useModelBuilderStore((s) => s.setUpdateNodeInternalsRef);
+
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    setUpdateNodeInternalsRef(updateNodeInternals);
+    return () => setUpdateNodeInternalsRef(null);
+  }, [updateNodeInternals, setUpdateNodeInternalsRef]);
 
   // 选中的节点（本地 UI 状态）
   const [selectedNode, setSelectedNode] = useState<RFNode | null>(null);
