@@ -30,6 +30,15 @@ router = APIRouter(prefix="/models/modules", tags=["模型模块定义"])
 def _build_list_item(module: ModuleDefinition) -> Dict[str, Any]:
     """构造列表项（轻量，不含 sub_nodes/sub_edges）"""
     schema = module.schema_json or {}
+    is_composite = schema.get("is_composite", False)
+
+    if is_composite:
+        proxy_inputs = schema.get("proxy_inputs", [])
+        proxy_outputs = schema.get("proxy_outputs", [])
+    else:
+        proxy_inputs = schema.get("input_ports", [])
+        proxy_outputs = schema.get("output_ports", [])
+
     return {
         "id": module.id,
         "type": module.type,
@@ -39,14 +48,24 @@ def _build_list_item(module: ModuleDefinition) -> Dict[str, Any]:
         "source": module.source,
         "version": module.version,
         "params_schema": schema.get("params_schema", []),
-        "proxy_inputs": schema.get("proxy_inputs", []),
-        "proxy_outputs": schema.get("proxy_outputs", []),
+        "proxy_inputs": proxy_inputs,
+        "proxy_outputs": proxy_outputs,
+        "input_ports_dynamic": schema.get("input_ports_dynamic"),
     }
 
 
 def _build_detail(module: ModuleDefinition) -> Dict[str, Any]:
     """构造详情（完整 schema_json，同时扁平化常用字段到顶层）"""
     schema = module.schema_json or {}
+    is_composite = schema.get("is_composite", False)
+
+    if is_composite:
+        proxy_inputs = schema.get("proxy_inputs", [])
+        proxy_outputs = schema.get("proxy_outputs", [])
+    else:
+        proxy_inputs = schema.get("input_ports", [])
+        proxy_outputs = schema.get("output_ports", [])
+
     return {
         "id": module.id,
         "type": module.type,
@@ -56,8 +75,9 @@ def _build_detail(module: ModuleDefinition) -> Dict[str, Any]:
         "source": module.source,
         "version": module.version,
         "params_schema": schema.get("params_schema", []),
-        "proxy_inputs": schema.get("proxy_inputs", []),
-        "proxy_outputs": schema.get("proxy_outputs", []),
+        "proxy_inputs": proxy_inputs,
+        "proxy_outputs": proxy_outputs,
+        "input_ports_dynamic": schema.get("input_ports_dynamic"),
         "schema_json": schema,
         "created_at": module.created_at.isoformat() if module.created_at else None,
         "updated_at": module.updated_at.isoformat() if module.updated_at else None,

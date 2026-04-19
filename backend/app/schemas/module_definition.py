@@ -22,6 +22,7 @@ class ModuleDefinitionListItem(BaseModel):
     params_schema: List[Dict[str, Any]] = Field(default_factory=list, description="参数声明列表")
     proxy_inputs: List[Dict[str, Any]] = Field(default_factory=list, description="代理输入端口")
     proxy_outputs: List[Dict[str, Any]] = Field(default_factory=list, description="代理输出端口")
+    input_ports_dynamic: Optional[bool] = Field(default=None, description="输入端口数是否动态")
 
 
 class ModuleDefinitionDetail(BaseModel):
@@ -37,6 +38,7 @@ class ModuleDefinitionDetail(BaseModel):
     params_schema: List[Dict[str, Any]] = Field(default_factory=list, description="参数声明列表")
     proxy_inputs: List[Dict[str, Any]] = Field(default_factory=list, description="代理输入端口")
     proxy_outputs: List[Dict[str, Any]] = Field(default_factory=list, description="代理输出端口")
+    input_ports_dynamic: Optional[bool] = Field(default=None, description="输入端口数是否动态")
     schema_json: Dict[str, Any] = Field(..., description="完整模块 schema")
     created_at: Optional[str] = Field(default=None, description="创建时间 ISO 字符串")
     updated_at: Optional[str] = Field(default=None, description="更新时间 ISO 字符串")

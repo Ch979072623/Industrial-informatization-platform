@@ -79,6 +79,8 @@ export interface ModuleDefinition {
   proxy_inputs: ProxyPort[];
   /** 代理输出端口 */
   proxy_outputs: ProxyPort[];
+  /** 输入端口数是否动态 */
+  input_ports_dynamic?: boolean;
 }
 
 // ==================== 模块定义（详情完整版） ====================
@@ -127,6 +129,9 @@ export interface ModelNodeData {
 
   /** 运行时状态：该复合节点的完整 schema（含 sub_nodes/sub_edges）是否已加载。undefined 视为 false。不持久化。 */
   subLoaded?: boolean;
+
+  /** 运行时状态：输入端口数是否动态。undefined 视为 false。不持久化。 */
+  inputPortsDynamic?: boolean;
 }
 
 export interface ModelNode {

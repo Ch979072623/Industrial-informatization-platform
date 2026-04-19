@@ -3,6 +3,7 @@
   "category": "atomic",
   "display_name": "通道拼接",
   "is_composite": false,
+  "input_ports_dynamic": true,
   "params_schema": [
     {"name": "dim", "type": "int", "default": 1, "description": "拼接维度"}
   ],

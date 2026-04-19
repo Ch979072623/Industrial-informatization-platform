@@ -146,6 +146,7 @@ function ModelCanvasInner({
             parameters: {}, // 默认参数会在后续从模块详情加载
             inputPorts: (module.proxy_inputs || []).map((p) => ({ name: p.name, type: 'tensor' })),
             outputPorts: (module.proxy_outputs || []).map((p) => ({ name: p.name, type: 'tensor' })),
+            inputPortsDynamic: module.input_ports_dynamic === true,
             icon: module.is_composite ? 'Network' : 'Layers',
             isComposite: module.is_composite,
           },
