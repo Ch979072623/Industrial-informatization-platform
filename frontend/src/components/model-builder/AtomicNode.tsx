@@ -1,19 +1,20 @@
 /**
  * 原子节点组件
- * 
+ *
  * 功能：
  * 1. 显示模块图标和名称
  * 2. 显示输入端口（左侧）和输出端口（右侧）
  * 3. 选中状态边框
  * 4. 参数摘要（小字）
+ * 5. 支持动态输入端口（inputPortsDynamic）
  */
-import { Handle, Position, type NodeProps } from '@xyflow/react';
-import { 
-  Box, 
-  Layers, 
-  Network, 
-  GitMerge, 
-  Target, 
+import { Handle, Position, type NodeProps, useNodeConnections, useUpdateNodeInternals } from '@xyflow/react';
+import {
+  Box,
+  Layers,
+  Network,
+  GitMerge,
+  Target,
   Puzzle,
   Square,
   Zap,
@@ -23,6 +24,7 @@ import {
   Minimize,
   Shrink
 } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
 import { cn } from '@/utils/cn';
 import type { ModelNodeData, PortDefinition } from '@/types/mlModule';
 
@@ -44,27 +46,74 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 /**
+ * 计算动态输入端口列表
+ *
+ * 当 inputPortsDynamic 为 true 时，端口数 = max(basePorts.length, connectedCount + 1)
+ * 超出 schema 声明的端口按 in_${i} 命名生成
+ */
+function computeDynamicPorts(
+  basePorts: PortDefinition[],
+  connectedCount: number
+): PortDefinition[] {
+  const needed = Math.max(basePorts.length, connectedCount + 1);
+  const ports: PortDefinition[] = [];
+  for (let i = 0; i < needed; i++) {
+    if (i < basePorts.length) {
+      ports.push(basePorts[i]);
+    } else {
+      ports.push({ name: `in_${i}`, type: 'tensor' });
+    }
+  }
+  return ports;
+}
+
+/**
  * 原子节点组件
- * 
+ *
  * 不可折叠的基础模块节点
  */
-export default function AtomicNode({ 
+export default function AtomicNode({
   data: _data,
   selected,
-  dragging 
+  dragging,
+  id,
 }: NodeProps) {
   const data = _data as unknown as ModelNodeData;
-  const { 
-    moduleName, 
-    displayName, 
-    parameters, 
-    inputPorts, 
+  const {
+    moduleName,
+    displayName,
+    parameters,
+    inputPorts,
     outputPorts,
-    icon
+    icon,
+    inputPortsDynamic,
   } = data;
 
   // 获取图标组件
   const IconComponent = ICON_MAP[icon || 'Box'] || Box;
+
+  // 获取当前节点的入边连接数
+  const connections = useNodeConnections({ id, handleType: 'target' });
+  const connectedCount = connections.length;
+
+  // 计算实际要渲染的输入端口
+  const effectiveInputPorts = useMemo(() => {
+    if (!inputPortsDynamic) {
+      return inputPorts || [];
+    }
+    return computeDynamicPorts(inputPorts || [], connectedCount);
+  }, [inputPortsDynamic, inputPorts, connectedCount]);
+
+  // 动态端口数量变化时，通知 React Flow 重新测量当前节点
+  // 否则 React Flow 内部的 nodeInternals 映射不会感知到新 Handle，
+  // 导致连线命中测试失败（新 Handle 在 DOM 但 React Flow 不认）
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  useEffect(() => {
+    if (inputPortsDynamic) {
+      updateNodeInternals(id);
+    }
+  }, [effectiveInputPorts.length, id, inputPortsDynamic, updateNodeInternals]);
 
   // 格式化参数显示
   const formatParamValue = (value: unknown): string => {
@@ -82,26 +131,26 @@ export default function AtomicNode({
       className={cn(
         'relative min-w-[180px] max-w-[240px] bg-card rounded-lg shadow-sm',
         'border-2 transition-all duration-200',
-        selected 
-          ? 'border-primary shadow-md ring-2 ring-primary/20' 
+        selected
+          ? 'border-primary shadow-md ring-2 ring-primary/20'
           : 'border-border hover:border-primary/50',
         dragging && 'shadow-lg scale-105'
       )}
     >
       {/* 输入端口 */}
-      {(inputPorts || []).map((port: PortDefinition, index: number) => {
+      {(effectiveInputPorts || []).map((port: PortDefinition, index: number) => {
         // 计算端口垂直位置
-        const totalPorts = inputPorts.length;
+        const totalPorts = effectiveInputPorts.length;
         const spacing = totalPorts > 1 ? 100 / (totalPorts + 1) : 50;
         const top = spacing * (index + 1);
-        
+
         return (
           <Handle
             key={`input-${port.name}`}
             type="target"
             position={Position.Left}
             id={port.name}
-            style={{ 
+            style={{
               top: `${top}%`,
               width: 12,
               height: 12,
@@ -137,7 +186,7 @@ export default function AtomicNode({
         {paramEntries.length > 0 && (
           <div className="border-t pt-2 mt-2 space-y-0.5">
             {paramEntries.map(([key, value]) => (
-              <div 
+              <div
                 key={key}
                 className="flex items-center justify-between text-xs"
               >
@@ -159,14 +208,14 @@ export default function AtomicNode({
         const totalPorts = outputPorts.length;
         const spacing = totalPorts > 1 ? 100 / (totalPorts + 1) : 50;
         const top = spacing * (index + 1);
-        
+
         return (
           <Handle
             key={`output-${port.name}`}
             type="source"
             position={Position.Right}
             id={port.name}
-            style={{ 
+            style={{
               top: `${top}%`,
               width: 12,
               height: 12,
