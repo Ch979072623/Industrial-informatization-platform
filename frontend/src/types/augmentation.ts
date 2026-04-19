@@ -86,14 +86,14 @@ export interface AugmentationTemplate {
 }
 
 /** 创建模板请求 */
-export interface CreateTemplateRequest {
+export interface AugmentationCreateTemplateRequest {
   name: string;
   description?: string;
   pipeline_config: AugmentationOperation[];
 }
 
 /** 更新模板请求 */
-export interface UpdateTemplateRequest {
+export interface AugmentationUpdateTemplateRequest {
   name?: string;
   description?: string;
   pipeline_config?: AugmentationOperation[];
@@ -151,7 +151,7 @@ export interface TimingStats {
 }
 
 /** 创建任务请求 */
-export interface CreateJobRequest {
+export interface AugmentationCreateJobRequest {
   name: string;
   source_dataset_id: string;
   pipeline_config: AugmentationOperation[];
@@ -168,7 +168,7 @@ export interface UpdateJobRequest {
 }
 
 /** 任务列表查询参数 */
-export interface JobListQuery {
+export interface AugmentationJobListQuery {
   page?: number;
   page_size?: number;
   status?: AugmentationJobStatus;
@@ -176,19 +176,19 @@ export interface JobListQuery {
 }
 
 /** 任务控制请求 */
-export interface JobControlRequest {
+export interface AugmentationJobControlRequest {
   action: 'pause' | 'resume' | 'cancel';
 }
 
 /** 任务控制响应 */
-export interface JobControlResponse {
+export interface AugmentationJobControlResponse {
   success: boolean;
   new_status: AugmentationJobStatus;
   message: string;
 }
 
 /** 任务进度响应 */
-export interface JobProgressResponse {
+export interface AugmentationJobProgressResponse {
   job_id: string;
   status: AugmentationJobStatus;
   progress: number;
@@ -331,13 +331,13 @@ export interface AugmentationState {
   // Actions
   fetchOperations: () => Promise<void>;
   fetchTemplates: () => Promise<void>;
-  createTemplate: (data: CreateTemplateRequest) => Promise<AugmentationTemplate>;
-  updateTemplate: (id: string, data: UpdateTemplateRequest) => Promise<void>;
+  createTemplate: (data: AugmentationCreateTemplateRequest) => Promise<AugmentationTemplate>;
+  updateTemplate: (id: string, data: AugmentationUpdateTemplateRequest) => Promise<void>;
   deleteTemplate: (id: string) => Promise<void>;
-  fetchJobs: (query?: JobListQuery) => Promise<void>;
-  createJob: (data: CreateJobRequest) => Promise<AugmentationJob>;
+  fetchJobs: (query?: AugmentationJobListQuery) => Promise<void>;
+  createJob: (data: AugmentationCreateJobRequest) => Promise<AugmentationJob>;
   controlJob: (jobId: string, action: 'pause' | 'resume' | 'cancel') => Promise<void>;
-  fetchJobProgress: (jobId: string) => Promise<JobProgressResponse>;
+  fetchJobProgress: (jobId: string) => Promise<AugmentationJobProgressResponse>;
   generatePreview: (data: PreviewRequest) => Promise<void>;
   fetchCustomScripts: () => Promise<void>;
   uploadScript: (data: UploadScriptRequest) => Promise<void>;

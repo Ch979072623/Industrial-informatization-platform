@@ -8,10 +8,7 @@ import { datasetApi } from './api';
 import type {
   PreviewResult,
   PreviewError,
-  PreviewErrorType,
-  UploadFileInfo,
   PreviewRequestParams,
-  PreviewState,
 } from '@/types/preview';
 import { PREVIEW_CONFIG } from '@/types/preview';
 

@@ -60,12 +60,6 @@ interface GeneratorCardProps {
   onSelect: () => void;
 }
 
-interface ConfigFormProps {
-  generator: GeneratorInfo;
-  config: Record<string, any>;
-  onChange: (config: Record<string, any>) => void;
-}
-
 // ==================== 生成器卡片组件 ====================
 
 const GeneratorCard = ({ generator, isSelected, onSelect }: GeneratorCardProps) => {

@@ -18,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ThumbnailImage } from '@/components/ui/thumbnail-image';
 import { datasetApi } from '@/services/api';
@@ -221,7 +220,6 @@ export function DatasetDetailPage() {
       setSplitSuccess(false);
       setSplitError(null);
       // 转换整数百分比为小数比例，并确保总和为1
-      const total = splitRatio.train + splitRatio.val + splitRatio.test;
       const splitData = {
         train_ratio: splitRatio.train / 100,
         val_ratio: splitRatio.val / 100,

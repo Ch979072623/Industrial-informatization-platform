@@ -3,7 +3,7 @@
  * 
  * 支持拖拽排序、参数配置、删除等操作
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   GripVertical,
   ChevronDown,

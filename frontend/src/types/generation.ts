@@ -82,14 +82,14 @@ export interface GenerationTemplate {
   updated_at: string;
 }
 
-export interface CreateTemplateRequest {
+export interface GenerationCreateTemplateRequest {
   name: string;
   description?: string;
   generator_name: string;
   config: Record<string, any>;
 }
 
-export interface UpdateTemplateRequest {
+export interface GenerationUpdateTemplateRequest {
   name?: string;
   description?: string;
   config?: Record<string, any>;
@@ -129,7 +129,7 @@ export interface GenerationJob {
   updated_at: string;
 }
 
-export interface CreateJobRequest {
+export interface GenerationCreateJobRequest {
   name: string;
   generator_name: string;
   config: Record<string, any>;
@@ -143,7 +143,7 @@ export interface UpdateJobRequest {
   status?: GenerationJobStatus;
 }
 
-export interface JobListQuery {
+export interface GenerationJobListQuery {
   page?: number;
   page_size?: number;
   status?: GenerationJobStatus;
@@ -170,11 +170,11 @@ export interface ExecuteGenerationResponse {
 
 export type JobControlAction = 'pause' | 'resume' | 'cancel';
 
-export interface JobControlRequest {
+export interface GenerationJobControlRequest {
   action: JobControlAction;
 }
 
-export interface JobControlResponse {
+export interface GenerationJobControlResponse {
   success: boolean;
   new_status: string;
   message: string;
@@ -188,7 +188,7 @@ export interface GenerationErrorDetail {
   error: string;
 }
 
-export interface JobProgressResponse {
+export interface GenerationJobProgressResponse {
   task_id: string;
   status: string;
   progress: number;

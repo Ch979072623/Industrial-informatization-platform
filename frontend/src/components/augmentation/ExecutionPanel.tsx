@@ -4,7 +4,7 @@
  * 配置增强任务参数并执行
  */
 import React, { useState, useCallback, useEffect } from 'react';
-import { Play, Pause, RotateCcw, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,8 +31,6 @@ import { useAugmentationStore } from '@/stores/augmentationStore';
 import { JOB_STATUS_LABELS, JOB_STATUS_COLORS } from '@/types/augmentation';
 import type {
   AugmentationOperation,
-  AugmentationJob,
-  AugmentationJobStatus,
 } from '@/types/augmentation';
 import type { Dataset } from '@/types';
 
@@ -87,7 +85,7 @@ export const ExecutionPanel: React.FC<ExecutionPanelProps> = ({
     setShowConfirmDialog(false);
 
     try {
-      const job = await createJob({
+      await createJob({
         name: `增强任务 - ${dataset.name}`,
         source_dataset_id: dataset.id,
         pipeline_config: pipelineConfig,

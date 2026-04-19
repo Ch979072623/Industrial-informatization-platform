@@ -52,7 +52,17 @@ models/
 *.pth
 *.pt
 *.onnx
-docs/
+
+# 私有笔记（提示词草稿、工作记录等）默认不上传
+# 公开文档通过白名单显式放行
+docs/*
+docs/private/
+# 公开文档白名单
+!docs/backlog.md
+!docs/qa-scripts.md
+!docs/phase-4b-cleanup-summary.md
+!docs/model-builder-architecture.md
+
 # Logs
 *.log
 logs/

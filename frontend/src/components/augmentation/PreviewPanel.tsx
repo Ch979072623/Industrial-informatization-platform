@@ -9,29 +9,24 @@
  * - 自动预览（防抖500ms）+ 手动刷新
  * - 完整的错误处理和加载状态
  */
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { 
   RefreshCw, 
   Image as ImageIcon, 
   AlertCircle, 
   ZoomIn, 
   ZoomOut, 
-  Maximize,
   Eye,
   EyeOff,
   Upload,
   X,
-  ChevronDown,
-  Maximize2,
   Loader2,
   RotateCcw,
-  WifiOff,
   Database,
   Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -39,7 +34,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { datasetApi } from '@/services/api';
-import { useAugmentationStore } from '@/stores/augmentationStore';
 import {
   createPreviewWithRetry,
   validateUploadFile,
@@ -273,7 +267,6 @@ interface PreviewPanelProps {
 export const PreviewPanel: React.FC<PreviewPanelProps> = ({
   dataset,
   pipelineConfig,
-  disabled = false,
 }) => {
   // ===== 状态管理 =====
   const [sampleType, setSampleType] = useState<PreviewSampleType>('dataset');

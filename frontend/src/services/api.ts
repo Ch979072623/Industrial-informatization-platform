@@ -215,18 +215,16 @@ export const datasetApi = {
 // 数据增强 API
 import type {
   AugmentationOperation,
-  AugmentationOperationDefinition,
   AvailableOperationsResponse,
   AugmentationTemplate,
-  CreateTemplateRequest,
-  UpdateTemplateRequest,
+  AugmentationCreateTemplateRequest,
+  AugmentationUpdateTemplateRequest,
   AugmentationJob,
-  CreateJobRequest,
-  UpdateJobRequest,
-  JobListQuery,
-  JobControlRequest,
-  JobControlResponse,
-  JobProgressResponse,
+  AugmentationCreateJobRequest,
+  AugmentationJobListQuery,
+  AugmentationJobControlRequest,
+  AugmentationJobControlResponse,
+  AugmentationJobProgressResponse,
   PreviewRequest,
   PreviewResponse,
   CustomScript,
@@ -243,30 +241,30 @@ export const augmentationApi = {
   getTemplates: (params?: { page?: number; page_size?: number }) =>
     api.get<ApiResponse<{ items: AugmentationTemplate[]; total: number }>>('/augmentation/templates', { params }),
 
-  createTemplate: (data: CreateTemplateRequest) =>
+  createTemplate: (data: AugmentationCreateTemplateRequest) =>
     api.post<ApiResponse<AugmentationTemplate>>('/augmentation/templates', data),
 
-  updateTemplate: (id: string, data: UpdateTemplateRequest) =>
+  updateTemplate: (id: string, data: AugmentationUpdateTemplateRequest) =>
     api.put<ApiResponse<AugmentationTemplate>>(`/augmentation/templates/${id}`, data),
 
   deleteTemplate: (id: string) =>
     api.delete<ApiResponse>(`/augmentation/templates/${id}`),
 
   // 任务管理
-  getJobs: (params?: JobListQuery) =>
+  getJobs: (params?: AugmentationJobListQuery) =>
     api.get<ApiResponse<{ items: AugmentationJob[]; total: number }>>('/augmentation/jobs', { params }),
 
   getJob: (id: string) =>
     api.get<ApiResponse<AugmentationJob>>(`/augmentation/jobs/${id}`),
 
-  createJob: (data: CreateJobRequest) =>
+  createJob: (data: AugmentationCreateJobRequest) =>
     api.post<ApiResponse<AugmentationJob>>('/augmentation/jobs', data),
 
-  controlJob: (id: string, data: JobControlRequest) =>
-    api.post<ApiResponse<JobControlResponse>>(`/augmentation/jobs/${id}/control`, data),
+  controlJob: (id: string, data: AugmentationJobControlRequest) =>
+    api.post<ApiResponse<AugmentationJobControlResponse>>(`/augmentation/jobs/${id}/control`, data),
 
   getJobProgress: (id: string) =>
-    api.get<ApiResponse<JobProgressResponse>>(`/augmentation/jobs/${id}/progress`),
+    api.get<ApiResponse<AugmentationJobProgressResponse>>(`/augmentation/jobs/${id}/progress`),
 
   // 预览
   createPreview: (data: PreviewRequest) =>
@@ -299,28 +297,24 @@ export const augmentationApi = {
 
 // 数据生成 API
 import type {
-  GeneratorInfo,
   GeneratorListResponse,
   ValidateConfigRequest,
   ValidateConfigResponse,
   GenerationPreviewRequest,
   GenerationPreviewResponse,
   GenerationTemplate,
-  CreateTemplateRequest,
-  UpdateTemplateRequest,
+  GenerationCreateTemplateRequest,
+  GenerationUpdateTemplateRequest,
   GenerationJob,
-  CreateJobRequest,
-  UpdateJobRequest,
-  JobListQuery,
+  GenerationJobListQuery,
   ExecuteGenerationRequest,
   ExecuteGenerationResponse,
-  JobControlRequest,
-  JobControlResponse,
-  JobProgressResponse,
+  GenerationJobControlRequest,
+  GenerationJobControlResponse,
+  GenerationJobProgressResponse,
   QualityReportResponse,
   MergeGenerationRequest,
   MergeGenerationResponse,
-  DefectCacheInfo,
   DefectCacheListResponse,
   RefreshCacheRequest,
   HeatmapGenerateRequest,
@@ -356,17 +350,17 @@ export const generationApi = {
   getTemplates: (params?: { page?: number; page_size?: number }) =>
     api.get<ApiResponse<{ items: GenerationTemplate[]; total: number }>>('/generation/templates', { params }),
 
-  createTemplate: (data: CreateTemplateRequest) =>
+  createTemplate: (data: GenerationCreateTemplateRequest) =>
     api.post<ApiResponse<GenerationTemplate>>('/generation/templates', data),
 
-  updateTemplate: (id: string, data: UpdateTemplateRequest) =>
+  updateTemplate: (id: string, data: GenerationUpdateTemplateRequest) =>
     api.put<ApiResponse<GenerationTemplate>>(`/generation/templates/${id}`, data),
 
   deleteTemplate: (id: string) =>
     api.delete<ApiResponse>(`/generation/templates/${id}`),
 
   // 任务管理
-  getJobs: (params?: JobListQuery) =>
+  getJobs: (params?: GenerationJobListQuery) =>
     api.get<ApiResponse<{ items: GenerationJob[]; total: number }>>('/generation/jobs', { params }),
 
   getJob: (id: string) =>
@@ -375,11 +369,11 @@ export const generationApi = {
   executeGeneration: (data: ExecuteGenerationRequest) =>
     api.post<ApiResponse<ExecuteGenerationResponse>>('/generation/execute', data),
 
-  controlJob: (id: string, data: JobControlRequest) =>
-    api.post<ApiResponse<JobControlResponse>>(`/generation/jobs/${id}/control`, data),
+  controlJob: (id: string, data: GenerationJobControlRequest) =>
+    api.post<ApiResponse<GenerationJobControlResponse>>(`/generation/jobs/${id}/control`, data),
 
   getJobProgress: (id: string) =>
-    api.get<ApiResponse<JobProgressResponse>>(`/generation/jobs/${id}/progress`),
+    api.get<ApiResponse<GenerationJobProgressResponse>>(`/generation/jobs/${id}/progress`),
 
   // 质量报告
   getQualityReport: (jobId: string) =>

@@ -3,7 +3,7 @@
  * 
  * 三栏布局：左侧操作列表、中间流水线编排、右侧预览与执行
  */
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Save, FolderOpen, HelpCircle, Loader2, Database, ArrowRight, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,15 +52,10 @@ const AugmentationPage: React.FC = () => {
     pipeline,
     templates,
     currentJob,
-    operationsLoading,
     fetchOperations,
     fetchTemplates,
     createTemplate,
     addToPipeline,
-    updatePipelineItem,
-    removeFromPipeline,
-    movePipelineItem,
-    clearPipeline,
     loadTemplateToPipeline,
     setPipeline,
   } = useAugmentationStore();
@@ -130,7 +125,7 @@ const AugmentationPage: React.FC = () => {
   );
 
   // 处理拖拽
-  const handleDragStart = (operation: AugmentationOperationDefinition) => {
+  const handleDragStart = (_operation: AugmentationOperationDefinition) => {
     // 拖拽开始时记录操作类型
   };
 

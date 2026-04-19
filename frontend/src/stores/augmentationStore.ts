@@ -10,14 +10,6 @@ import type {
   AugmentationState,
   AugmentationOperation,
   AugmentationOperationDefinition,
-  AugmentationTemplate,
-  CreateTemplateRequest,
-  UpdateTemplateRequest,
-  AugmentationJob,
-  CreateJobRequest,
-  JobListQuery,
-  PreviewRequest,
-  UploadScriptRequest,
 } from '@/types/augmentation';
 
 // 生成唯一 ID
@@ -50,7 +42,7 @@ const createDefaultOperation = (
 };
 
 export const useAugmentationStore = create<AugmentationState>()(
-  immer((set, get) => ({
+  immer((set, _get) => ({
     // ============ 初始状态 ============
     operations: [],
     categories: [],

@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   Users,
   Database,
-  Brain,
   Microscope,
   BarChart3,
   Settings,

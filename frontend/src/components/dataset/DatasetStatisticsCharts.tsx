@@ -118,13 +118,13 @@ const ClassDistributionChart = ({ data }: ClassDistributionChartProps) => {
           />
           <YAxis />
           <Tooltip 
-            formatter={(value: number, name: string, props: any) => [
+            formatter={(value: number, _name: string, props: any) => [
               `${value} (${props.payload.percentage}%)`,
               '标注数量'
             ]}
           />
           <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]}>
-            {data.map((entry, index) => (
+            {data.map((_entry, index) => (
               <Cell key={`cell-${index}`} fill={`hsl(${210 + index * 20}, 70%, 60%)`} />
             ))}
           </Bar>
@@ -195,7 +195,7 @@ const ImageSizeDistributionChart = ({ data }: ImageSizeDistributionChartProps) =
               `${value}px`,
               name
             ]}
-            labelFormatter={(label: any, payload: any) => {
+            labelFormatter={(_label: any, payload: any) => {
               if (payload && payload[0]) {
                 return `尺寸: ${payload[0].payload.width}x${payload[0].payload.height}`;
               }

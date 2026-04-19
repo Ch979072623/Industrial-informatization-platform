@@ -6,9 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, ChevronDown, ChevronRight, GripVertical } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CATEGORY_NAMES, CATEGORY_ICONS } from '@/types/augmentation';
 import type { AugmentationOperationDefinition, AugmentationCategory } from '@/types/augmentation';
 
 interface OperationListProps {
