@@ -1,14 +1,13 @@
 /**
- * 自定义节点组件
+ * 复合节点组件（折叠态）
  * 
  * 功能：
  * 1. 显示模块图标和名称
  * 2. 显示输入端口（左侧）和输出端口（右侧）
  * 3. 选中状态边框
  * 4. 参数摘要（小字）
- * 5. 双击打开参数配置
+ * 5. 右上角展开图标（纯视觉标记）
  */
-import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { 
   Box, 
@@ -23,10 +22,11 @@ import {
   Pyramid,
   Crosshair,
   Minimize,
-  Shrink
+  Shrink,
+  Maximize2
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import type { PortDefinition } from '@/types/mlModule';
+import type { ModelNodeData, PortDefinition } from '@/types/mlModule';
 
 // 图标映射
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -45,27 +45,17 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Shrink,
 };
 
-/** 节点数据结构 */
-interface NodeData {
-  moduleName: string;
-  displayName: string;
-  parameters: Record<string, unknown>;
-  inputPorts: PortDefinition[];
-  outputPorts: PortDefinition[];
-  icon?: string;
-}
-
 /**
- * 自定义节点组件
+ * 复合节点组件（折叠态）
  * 
- * React Flow 使用的自定义节点渲染组件
+ * 本轮只实现折叠态外观，不实现展开态渲染和交互。
  */
-function CustomNodeComponent({ 
-  data,
+export default function CompositeNode({ 
+  data: _data,
   selected,
   dragging 
 }: NodeProps) {
-  const typedData = data as unknown as NodeData;
+  const data = _data as unknown as ModelNodeData;
   const { 
     moduleName, 
     displayName, 
@@ -73,7 +63,7 @@ function CustomNodeComponent({
     inputPorts, 
     outputPorts,
     icon
-  } = typedData;
+  } = data;
 
   // 获取图标组件
   const IconComponent = ICON_MAP[icon || 'Box'] || Box;
@@ -127,6 +117,14 @@ function CustomNodeComponent({
 
       {/* 节点内容 */}
       <div className="p-3">
+        {/* 展开图标 - 纯视觉标记 */}
+        <div 
+          className="absolute top-2 right-2 text-muted-foreground/60 pointer-events-none"
+          data-testid="composite-expand-icon"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </div>
+
         {/* 头部：图标和名称 */}
         <div className="flex items-center gap-2 mb-2">
           <div className={cn(
@@ -192,8 +190,3 @@ function CustomNodeComponent({
     </div>
   );
 }
-
-// 使用 memo 优化渲染性能
-export const CustomNode = memo(CustomNodeComponent);
-
-export default CustomNode;

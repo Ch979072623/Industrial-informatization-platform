@@ -21,6 +21,7 @@ import {
   ReactFlowProvider,
   type Connection,
   type Node,
+  type NodeProps,
   type ReactFlowInstance,
   Panel,
   addEdge,
@@ -32,12 +33,21 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 import { useToast } from '@/hooks/use-toast';
 import { useModelBuilderStore } from '@/stores/modelBuilderStore';
-import { CustomNode } from './CustomNode';
+import AtomicNode from './AtomicNode';
+import CompositeNode from './CompositeNode';
 import type { ModuleDefinition, RFNode } from '@/types/mlModule';
 
-// 节点类型注册
+// 节点类型路由：根据 isComposite 分发到原子/复合节点组件
+function ModuleNode(props: NodeProps) {
+  const data = props.data as { isComposite?: boolean } | undefined;
+  return data?.isComposite
+    ? <CompositeNode {...props} />
+    : <AtomicNode {...props} />;
+}
+
+// 节点类型注册（保持 'module' 键名不变，兼容已持久化数据）
 const nodeTypes = {
-  module: CustomNode,
+  module: ModuleNode,
 };
 
 interface ModelCanvasProps {
