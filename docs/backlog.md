@@ -112,7 +112,7 @@ ESLint 的 `@typescript-eslint/no-unused-vars` 规则可以通过下划线或 es
 
 **预估成本**：评估 tsconfig 影响 30 分钟，改动本身 5 分钟。
 
-## [A-cleanup 合集 · 触发时机：A-5 完成后] 画布 UX 小 bug
+## cleanup 合集 · 触发时机：A-5 取消后启动 · 2026-04-20] 画布 UX 小 bug
 
 **触发时机**：Phase 4b A 组（画布展开/折叠重构）A-5 完成后，A-cleanup 阶段一次性统一修。
 
@@ -334,3 +334,70 @@ Phase 4b A-3b-hotfix 发现：React Flow v12 的 `nodeInternals` 测量系统不
 - 自定义节点有任何运行时端口变化时
 
 **伴生教训**：React Flow 的运行时测量系统属于**单元测试盲区**，jsdom 环境不运行 measureNode。未来所有 React Flow 相关提示词必须在验收剧本里声明"需要浏览器手动验证"。
+
+## [已取消 · 2026-04-20] Phase 4b A-5 跨层级拖拽
+
+**原设想**：
+- 方向 1：从外部拖节点进入展开容器，parentId 更新
+- 方向 2：从容器内拖子节点到外部，外部连线重接或断开
+
+**取消理由**：
+1. **产品等价**：用户重新表述的需求（拖拽连线自定义复合结构 + 管理员权限 + I/O 检查）等价于 D.1 "封装为新复合模块"，无需另开 A-5 任务
+2. **技术被堵死**：A-3c 把子画布做成 `pointer-events-none` 博物馆玻璃罩，方向 2（从子画布拖出）事实上不可能；原始 A-5 依赖的 parentId 路径在 A-3c 选 α（普通 DOM + 绝对定位）时也被同步排除
+3. **代码状态干净**：A-5-recon 确认 `ModelCanvas` 从未注册 `onNodeDragStop` 等 drag 钩子，`nestedNodes.ts` 自 A-1 起为 dead code，取消无需 rollback
+
+**产品需求加固（转入 D.1）**：见下方"D.1 产品需求加固"条目
+
+**证据来源**：`docs/private/A-5-recon-report.md`
+
+---
+
+## [P3 · 触发时机：D 组开工前] `nestedNodes.ts` 去向评估
+
+**背景**：
+`frontend/src/utils/modelBuilder/nestedNodes.ts` 提供 `flattenNodes` / `nestNodes` 纯函数，A-1 建立时预期 A-5 会用到。A-5-recon 确认截至 A-4 无任何生产代码 import（仅测试文件引用），是 dead code。A-5 已取消后该工具失去原定消费者。
+
+**去向候选**：
+- α：保留。D.1 封装逻辑如需处理选中节点之间的父子结构，`flattenNodes` 可能借得上
+- β：删除工具 + 对应测试。D.1 如纯粹"选中 → 生成 schema → 保存"不经过层级计算
+
+**触发时机**：D 组开工前（起草 D.1 提示词时根据 D.1 实现细节决定）
+
+**预估成本**：β 约 5 分钟；α 如需改造约 30 分钟
+
+---
+
+## [加固 · 合并入 D.1 · 触发时机：D 组开工] D.1 "封装为新复合模块" 产品需求加固
+
+**背景**：
+A-5 取消过程中用户重新确认 D.1 的完整产品形态，在原 Phase 4b 交接文档 D.1 描述之外补充两项硬约束。
+
+**加固项**：
+1. **管理员权限**：非管理员用户不能创建新复合模块。后端 API 鉴权（`POST /models/encapsulate`）+ 前端菜单按用户角色隐藏
+2. **输入输出检查**：保存前校验
+   - `proxy_inputs` / `proxy_outputs` 指定的 `sub_node_id` 确实在选中节点集合内
+   - 端口索引 `port_index` 在对应子节点的 schema 端口范围内
+   - 选中节点之间的 `sub_edges` 构成 DAG（无环）
+
+**触发时机**：D 组（封装/解封装）正式开工时一并实施，不单独立项
+
+## [P3 · 触发时机：参数面板下次重度改动时] 受控 input 的 Ctrl+Z 行为不一致
+
+**现象**：
+参数面板的 number input（如 in_channels、out_channels 等）内进行"全选 + Delete + 输入新值"的编辑序列后，按 Ctrl+Z 可能出现部分撤销的中间态（如输入框显示 `064` 且 `64` 仍选中），而不是清晰回到编辑前的值。
+
+**根因**：
+React 受控组件的 `value` 由 state 管理，浏览器 input 的原生 undo 栈操作 DOM，两者脱节。这是 React + controlled input 的固有行为，不是项目代码 bug。
+
+**影响范围**：
+所有 React 受控 input，不限于参数面板。但参数面板是用户最可能触发这种编辑序列的地方。
+
+**修法候选**：
+- 方向 α：参数面板维护自己的 undo 栈，接管 Ctrl+Z 在 input 内的行为（`event.preventDefault()` + 自定义 undo）
+- 方向 β：把参数面板的每次修改纳入全局 zustand history 栈（通过 `saveHistory` 在 onBlur 时触发）
+- 方向 γ：不修，写进用户文档说明"参数编辑请用拖选+输入直接覆盖"
+
+**触发时机**：
+参数面板下次重度改动时（如 Phase 4b 参数校验增强、或 C 组模型验证返回的参数面板实时推算功能开工时）一并处理。单独为此修改不值得。
+
+**发现来源**：Phase 4b A-cleanup-hotfix 浏览器验证阶段，2026-04-20

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mlModuleApi } from '@/services/api';
-import { useModelBuilderStore } from './modelBuilderStore';
+import { useModelBuilderStore, createOnRehydrateStorageHandler } from './modelBuilderStore';
 import type { RFNode, ModuleSchemaDetail, ModuleDefinitionDetail } from '@/types/mlModule';
 
 vi.mock('@/services/api', () => ({
@@ -275,5 +275,35 @@ describe('modelBuilderStore actions', () => {
 
     const persisted = JSON.parse(raw!);
     expect(persisted.state.viewport).toEqual({ x: 50, y: 60, zoom: 0.8 });
+  });
+});
+
+describe('createOnRehydrateStorageHandler', () => {
+  it('history 为空时调用 saveHistory seed baseline', () => {
+    const handler = createOnRehydrateStorageHandler();
+    const saveHistory = vi.fn();
+    handler({ history: [], saveHistory } as unknown as Parameters<typeof handler>[0], undefined);
+    expect(saveHistory).toHaveBeenCalledOnce();
+  });
+
+  it('history 非空时不重复 seed', () => {
+    const handler = createOnRehydrateStorageHandler();
+    const saveHistory = vi.fn();
+    handler({ history: [{ nodes: [], edges: [] }], saveHistory } as unknown as Parameters<typeof handler>[0], undefined);
+    expect(saveHistory).not.toHaveBeenCalled();
+  });
+
+  it('error 时不执行 saveHistory', () => {
+    const handler = createOnRehydrateStorageHandler();
+    const saveHistory = vi.fn();
+    handler({ history: [], saveHistory } as unknown as Parameters<typeof handler>[0], new Error('fail'));
+    expect(saveHistory).not.toHaveBeenCalled();
+  });
+
+  it('state 为 undefined 时不执行 saveHistory', () => {
+    const handler = createOnRehydrateStorageHandler();
+    const saveHistory = vi.fn();
+    handler(undefined, undefined);
+    expect(saveHistory).not.toHaveBeenCalled();
   });
 });

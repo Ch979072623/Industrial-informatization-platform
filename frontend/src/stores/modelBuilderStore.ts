@@ -16,7 +16,7 @@ import { applyNodeChanges, applyEdgeChanges, type NodeChange, type EdgeChange, t
 import { mlModuleApi } from '@/services/api';
 import type { RFNode, RFEdge, ModuleSchemaDetail, SubNode, SubEdge } from '@/types/mlModule';
 
-interface ModelBuilderState {
+export interface ModelBuilderState {
   nodes: RFNode[];
   edges: RFEdge[];
   viewport: Viewport | undefined;
@@ -58,6 +58,15 @@ interface ModelBuilderState {
 }
 
 const MAX_HISTORY = 20;
+
+export function createOnRehydrateStorageHandler() {
+  return (state: ModelBuilderState | undefined, error?: unknown) => {
+    if (error) return;
+    if (state && state.history.length === 0) {
+      state.saveHistory();
+    }
+  };
+}
 
 export const useModelBuilderStore = create<ModelBuilderState>()(
   persist(
@@ -252,6 +261,7 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
         edges: state.edges,
         viewport: state.viewport,
       }),
+      onRehydrateStorage: createOnRehydrateStorageHandler,
     }
   )
 );
