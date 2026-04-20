@@ -194,4 +194,34 @@ describe('ModelCanvas window hotkeys', () => {
 
     expect(useModelBuilderStore.getState().historyIndex).toBe(0);
   });
+
+  it('input 内 Ctrl+S 阻止浏览器保存网页，但不触发画布保存', () => {
+    const onSave = vi.fn();
+    render(<ModelCanvas onSave={onSave} />);
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const event = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true });
+    const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
+    input.dispatchEvent(event);
+
+    expect(preventDefaultSpy).toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+
+    document.body.removeChild(input);
+  });
+
+  it('非 input 焦点时 Ctrl+S 触发画布保存', () => {
+    const onSave = vi.fn();
+    render(<ModelCanvas onSave={onSave} />);
+
+    const event = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true });
+    const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
+    window.dispatchEvent(event);
+
+    expect(preventDefaultSpy).toHaveBeenCalled();
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
 });

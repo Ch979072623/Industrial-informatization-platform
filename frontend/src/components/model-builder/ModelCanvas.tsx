@@ -362,16 +362,27 @@ function ModelCanvasInner({
   // window 级快捷键监听
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Guard：避免在输入框/可编辑区域触发全局快捷键
       const target = event.target as HTMLElement | null;
-      if (
+      const isInInput =
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
-        target?.isContentEditable
-      ) {
+        target?.isContentEditable === true;
+
+      // ① Ctrl+S 特判：preventDefault 无条件（阻止浏览器保存网页）；画布保存仅非 input 时触发
+      if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+        event.preventDefault();
+        if (!isInInput) {
+          onSave?.();
+        }
         return;
       }
 
+      // ② 其他快捷键在 input 内放行（不 preventDefault，让浏览器/React 原生处理）
+      if (isInInput) {
+        return;
+      }
+
+      // ③ 以下仅非 input 时生效
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedNode) {
           deleteSelectedNode();
@@ -386,10 +397,6 @@ function ModelCanvasInner({
         } else {
           undo();
         }
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key === 's') {
-        event.preventDefault();
-        onSave?.();
       }
     };
 
