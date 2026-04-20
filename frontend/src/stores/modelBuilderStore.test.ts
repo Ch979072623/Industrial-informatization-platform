@@ -220,4 +220,41 @@ describe('modelBuilderStore actions', () => {
     expect(useModelBuilderStore.getState().moduleSchemaLoading['PMSFA']).toBe(false);
     expect(useModelBuilderStore.getState().moduleSchemas['PMSFA']).toBeUndefined();
   });
+
+  it('onEdgesChange 处理 remove 类型变更后 edges 数组正确更新', () => {
+    const store = useModelBuilderStore.getState();
+    store.setNodes([makeNode('n1'), makeNode('n2')]);
+    store.setEdges([
+      { id: 'e1', source: 'n1', target: 'n2' },
+      { id: 'e2', source: 'n2', target: 'n1' },
+    ]);
+
+    store.onEdgesChange([{ type: 'remove', id: 'e1' }]);
+
+    const edges = useModelBuilderStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges.find((e) => e.id === 'e1')).toBeUndefined();
+    expect(edges[0].id).toBe('e2');
+  });
+
+  it('setEdges 过滤选中 edges 后数组正确更新', () => {
+    const store = useModelBuilderStore.getState();
+    store.setEdges([
+      { id: 'e1', source: 'n1', target: 'n2', selected: false },
+      { id: 'e2', source: 'n2', target: 'n1', selected: true },
+      { id: 'e3', source: 'n1', target: 'n3', selected: true },
+    ]);
+
+    const selectedEdgeIds = useModelBuilderStore.getState().edges
+      .filter((e) => e.selected)
+      .map((e) => e.id);
+
+    store.setEdges((eds) => eds.filter((e) => !selectedEdgeIds.includes(e.id)));
+
+    const edges = useModelBuilderStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].id).toBe('e1');
+    expect(edges.find((e) => e.id === 'e2')).toBeUndefined();
+    expect(edges.find((e) => e.id === 'e3')).toBeUndefined();
+  });
 });

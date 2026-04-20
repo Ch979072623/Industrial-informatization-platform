@@ -306,8 +306,18 @@ function ModelCanvasInner({
   // 键盘快捷键
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedNode) {
-        deleteSelectedNode();
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (selectedNode) {
+          deleteSelectedNode();
+        } else {
+          // 删除选中的连线
+          const selectedEdgeIds = edges.filter((e) => e.selected).map((e) => e.id);
+          if (selectedEdgeIds.length > 0) {
+            setEdges((eds) => eds.filter((e) => !selectedEdgeIds.includes(e.id)));
+            saveHistory();
+            toast({ title: `已删除 ${selectedEdgeIds.length} 条连线` });
+          }
+        }
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'z') {
         event.preventDefault();
@@ -322,7 +332,7 @@ function ModelCanvasInner({
         onSave?.();
       }
     },
-    [selectedNode, deleteSelectedNode, undo, redo, onSave]
+    [selectedNode, deleteSelectedNode, edges, setEdges, saveHistory, toast, undo, redo, onSave]
   );
 
   return (
