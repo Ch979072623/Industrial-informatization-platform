@@ -340,6 +340,25 @@ function ModelCanvasInner({
     }
   }, [selectedNode, setNodes, setEdges, onNodeSelect, saveHistory, toast]);
 
+  // 删除选中的连线（供键盘和工具栏复用）
+  const deleteSelectedEdges = useCallback(() => {
+    const selectedEdgeIds = edges.filter((e) => e.selected).map((e) => e.id);
+    if (selectedEdgeIds.length > 0) {
+      setEdges((eds) => eds.filter((e) => !selectedEdgeIds.includes(e.id)));
+      saveHistory();
+      toast({ title: `已删除 ${selectedEdgeIds.length} 条连线` });
+    }
+  }, [edges, setEdges, saveHistory, toast]);
+
+  // 统一删除入口：节点优先，其次 edge
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedNode) {
+      deleteSelectedNode();
+    } else {
+      deleteSelectedEdges();
+    }
+  }, [selectedNode, deleteSelectedNode, deleteSelectedEdges]);
+
   // 键盘快捷键
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -347,13 +366,7 @@ function ModelCanvasInner({
         if (selectedNode) {
           deleteSelectedNode();
         } else {
-          // 删除选中的连线
-          const selectedEdgeIds = edges.filter((e) => e.selected).map((e) => e.id);
-          if (selectedEdgeIds.length > 0) {
-            setEdges((eds) => eds.filter((e) => !selectedEdgeIds.includes(e.id)));
-            saveHistory();
-            toast({ title: `已删除 ${selectedEdgeIds.length} 条连线` });
-          }
+          deleteSelectedEdges();
         }
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'z') {
@@ -369,7 +382,7 @@ function ModelCanvasInner({
         onSave?.();
       }
     },
-    [selectedNode, deleteSelectedNode, edges, setEdges, saveHistory, toast, undo, redo, onSave]
+    [selectedNode, deleteSelectedNode, deleteSelectedEdges, undo, redo, onSave]
   );
 
   return (
@@ -443,9 +456,9 @@ function ModelCanvasInner({
             <Button
               variant="ghost"
               size="icon"
-              onClick={deleteSelectedNode}
-              disabled={!selectedNode}
-              title="删除选中节点 (Delete)"
+              onClick={handleDeleteSelected}
+              disabled={!selectedNode && !edges.some((e) => e.selected)}
+              title="删除选中 (Delete)"
             >
               <Trash2 className="h-4 w-4" />
             </Button>

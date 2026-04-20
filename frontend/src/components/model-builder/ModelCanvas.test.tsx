@@ -1,6 +1,20 @@
-import { describe, it, expect } from 'vitest';
-import { isValidConnection } from './ModelCanvas';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { isValidConnection, ModelCanvas } from './ModelCanvas';
+import { useModelBuilderStore } from '@/stores/modelBuilderStore';
 import type { RFNode, ModelNodeData } from '@/types/mlModule';
+
+vi.mock('@/hooks/use-toast', () => ({
+  useToast: () => ({ toast: vi.fn() }),
+}));
+
+// React Flow v12 依赖 ResizeObserver，jsdom 未提供
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+window.ResizeObserver = ResizeObserverMock;
 
 function makeNode(id: string, inputPorts: string[], outputPorts: string[]): RFNode {
   const data: ModelNodeData = {
@@ -81,5 +95,53 @@ describe('isValidConnection', () => {
     expect(isValidConnection(nodes, { source: 'n1', sourceHandle: 'y', target: 'n2', targetHandle: 'a' })).toBe(true);
     expect(isValidConnection(nodes, { source: 'n1', sourceHandle: 'a', target: 'n2', targetHandle: 'x' })).toBe(false);
     expect(isValidConnection(nodes, { source: 'n1', sourceHandle: 'b', target: 'n2', targetHandle: 'x' })).toBe(false);
+  });
+});
+
+describe('ModelCanvas toolbar', () => {
+  beforeEach(() => {
+    useModelBuilderStore.setState({
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+      history: [],
+      historyIndex: -1,
+      moduleSchemas: {},
+      moduleSchemaLoading: {},
+      moduleSchemaError: {},
+      updateNodeInternalsRef: null,
+      viewport: undefined,
+    });
+  });
+
+  it('垃圾桶按钮在无选中节点且无选中 edge 时 disabled', () => {
+    render(<ModelCanvas />);
+    const btn = screen.getByTitle('删除选中 (Delete)');
+    expect(btn).toBeDisabled();
+  });
+
+  it('垃圾桶按钮在有选中 edge 时 enabled', () => {
+    useModelBuilderStore.setState({
+      edges: [{ id: 'e1', source: 'n1', target: 'n2', selected: true }],
+    });
+    render(<ModelCanvas />);
+    const btn = screen.getByTitle('删除选中 (Delete)');
+    expect(btn).not.toBeDisabled();
+  });
+
+  it('点击垃圾桶按钮删除选中的 edges', () => {
+    const store = useModelBuilderStore.getState();
+    store.setEdges([
+      { id: 'e1', source: 'n1', target: 'n2', selected: true },
+      { id: 'e2', source: 'n2', target: 'n3', selected: false },
+    ]);
+
+    render(<ModelCanvas />);
+    const btn = screen.getByTitle('删除选中 (Delete)');
+    fireEvent.click(btn);
+
+    const edges = useModelBuilderStore.getState().edges;
+    expect(edges).toHaveLength(1);
+    expect(edges[0].id).toBe('e2');
   });
 });
