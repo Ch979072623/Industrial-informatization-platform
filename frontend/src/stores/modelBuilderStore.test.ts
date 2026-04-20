@@ -257,4 +257,23 @@ describe('modelBuilderStore actions', () => {
     expect(edges.find((e) => e.id === 'e2')).toBeUndefined();
     expect(edges.find((e) => e.id === 'e3')).toBeUndefined();
   });
+
+  it('setViewport 正确更新 viewport 状态', () => {
+    const store = useModelBuilderStore.getState();
+    store.setViewport({ x: 100, y: 200, zoom: 1.5 });
+
+    const state = useModelBuilderStore.getState();
+    expect(state.viewport).toEqual({ x: 100, y: 200, zoom: 1.5 });
+  });
+
+  it('partialize 把 viewport 写进 localStorage', () => {
+    const store = useModelBuilderStore.getState();
+    store.setViewport({ x: 50, y: 60, zoom: 0.8 });
+
+    const raw = localStorage.getItem('model-builder-draft');
+    expect(raw).toBeTruthy();
+
+    const persisted = JSON.parse(raw!);
+    expect(persisted.state.viewport).toEqual({ x: 50, y: 60, zoom: 0.8 });
+  });
 });

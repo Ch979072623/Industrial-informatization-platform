@@ -12,13 +12,14 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { applyNodeChanges, applyEdgeChanges, type NodeChange, type EdgeChange } from '@xyflow/react';
+import { applyNodeChanges, applyEdgeChanges, type NodeChange, type EdgeChange, type Viewport } from '@xyflow/react';
 import { mlModuleApi } from '@/services/api';
 import type { RFNode, RFEdge, ModuleSchemaDetail, SubNode, SubEdge } from '@/types/mlModule';
 
 interface ModelBuilderState {
   nodes: RFNode[];
   edges: RFEdge[];
+  viewport: Viewport | undefined;
   selectedNodeId: string | null;
   history: { nodes: RFNode[]; edges: RFEdge[] }[];
   historyIndex: number;
@@ -37,6 +38,7 @@ interface ModelBuilderState {
   setEdges: (edges: RFEdge[] | ((prev: RFEdge[]) => RFEdge[])) => void;
 
   setSelectedNodeId: (id: string | null) => void;
+  setViewport: (viewport: Viewport) => void;
   saveHistory: () => void;
   undo: () => void;
   redo: () => void;
@@ -69,6 +71,7 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
       moduleSchemaLoading: {},
       moduleSchemaError: {},
       updateNodeInternalsRef: null,
+      viewport: undefined,
 
       onNodesChange: (changes) =>
         set((state) => ({
@@ -91,6 +94,8 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
         })),
 
       setSelectedNodeId: (id) => set({ selectedNodeId: id }),
+
+      setViewport: (viewport) => set({ viewport }),
 
       saveHistory: () =>
         set((state) => {
@@ -245,6 +250,7 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
           return { ...n, data: rest };
         }),
         edges: state.edges,
+        viewport: state.viewport,
       }),
     }
   )

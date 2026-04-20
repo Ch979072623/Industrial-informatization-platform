@@ -94,6 +94,8 @@ function ModelCanvasInner({
   const setNodes = useModelBuilderStore((s) => s.setNodes);
   const setEdges = useModelBuilderStore((s) => s.setEdges);
   const saveHistory = useModelBuilderStore((s) => s.saveHistory);
+  const viewport = useModelBuilderStore((s) => s.viewport);
+  const setViewport = useModelBuilderStore((s) => s.setViewport);
   const undo = useModelBuilderStore((s) => s.undo);
   const redo = useModelBuilderStore((s) => s.redo);
   const canUndo = useModelBuilderStore((s) => s.canUndo);
@@ -117,6 +119,19 @@ function ModelCanvasInner({
   useEffect(() => {
     onInit?.(reactFlowInstance);
   }, [onInit, reactFlowInstance]);
+
+  // 恢复或初始化 viewport
+  const hasRestoredViewport = useRef(false);
+  useEffect(() => {
+    if (hasRestoredViewport.current) return;
+    hasRestoredViewport.current = true;
+
+    if (viewport) {
+      reactFlowInstance.setViewport(viewport);
+    } else {
+      reactFlowInstance.fitView();
+    }
+  }, [reactFlowInstance, viewport]);
 
   // 处理拖拽放置
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -353,6 +368,7 @@ function ModelCanvasInner({
         onPaneClick={onPaneClick}
         onDragOver={onDragOver}
         onDrop={onDrop}
+        onMoveEnd={(_, vp) => setViewport(vp)}
         nodeTypes={nodeTypes}
         attributionPosition="bottom-left"
         deleteKeyCode={['Backspace', 'Delete']}
