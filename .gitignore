@@ -57,11 +57,16 @@ models/
 # 公开文档通过白名单显式放行
 docs/*
 docs/private/
+
 # 公开文档白名单
 !docs/backlog.md
 !docs/qa-scripts.md
 # !docs/phase-4b-cleanup-summary.md
 !docs/model-builder-architecture.md
+# 论文原版源码（私有，不上传 GitHub）
+backend/app/ml/paper_reference/**
+# 但保留 README 让未来看项目结构的人知道此处用途
+!backend/app/ml/paper_reference/README.md
 
 # Logs
 *.log
