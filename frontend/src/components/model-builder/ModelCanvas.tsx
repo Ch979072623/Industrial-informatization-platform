@@ -36,7 +36,24 @@ import { useToast } from '@/hooks/use-toast';
 import { useModelBuilderStore } from '@/stores/modelBuilderStore';
 import AtomicNode from './AtomicNode';
 import CompositeNode from './CompositeNode';
-import type { ModuleDefinition, RFNode } from '@/types/mlModule';
+import type { ModuleDefinition, RFNode, RFEdge, ModelNodeData } from '@/types/mlModule';
+
+/**
+ * 校验连接合法性：禁止从 target handle（输入端口）开始拖线
+ */
+export function isValidConnection(nodes: RFNode[], edge: Connection | RFEdge): boolean {
+  if (edge.source && edge.sourceHandle) {
+    const sourceNode = nodes.find((n) => n.id === edge.source);
+    if (sourceNode) {
+      const data = sourceNode.data as unknown as ModelNodeData;
+      const outputPortNames = new Set((data.outputPorts || []).map((p) => p.name));
+      if (!outputPortNames.has(edge.sourceHandle)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
 
 // 节点类型路由：根据 isComposite 分发到原子/复合节点组件
 function ModuleNode(props: NodeProps) {
@@ -196,6 +213,11 @@ function ModelCanvasInner({
   );
 
   // 处理连接（连线）
+  const isValidConnectionCb = useCallback(
+    (edge: Connection | RFEdge) => isValidConnection(nodes, edge),
+    [nodes]
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
       // 验证连接
@@ -369,6 +391,7 @@ function ModelCanvasInner({
         onDragOver={onDragOver}
         onDrop={onDrop}
         onMoveEnd={(_, vp) => setViewport(vp)}
+        isValidConnection={isValidConnectionCb}
         nodeTypes={nodeTypes}
         attributionPosition="bottom-left"
         deleteKeyCode={['Backspace', 'Delete']}
