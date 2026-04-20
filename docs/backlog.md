@@ -182,6 +182,20 @@ ESLint 的 `@typescript-eslint/no-unused-vars` 规则可以通过下划线或 es
 
 **预估成本**：5 分钟（验证通过）；如果发现 bug 视具体情况。
 
+### 子项 6：反向拖线从 target handle 出发会刷 React Flow Error #008
+
+**现状**：用户从复合节点的输入 handle（target 类型）开始拖拽连线时，React Flow 在拖拽过程中每帧尝试构造候选 edge，但 sourceHandle 实际是 target 类型的 Handle，导致 Error #008 "Couldn't create edge for source handle" 刷屏。松开鼠标后无 edge 真的产生（React Flow 内部拒绝），但 Console 已经累积几百条错误日志。
+
+**根因**：`ModelCanvas.tsx` 的 `onConnect` 有 self-loop / targetHandle occupied / cycle 三道校验，但没有"source Handle 必须是 source 类型"这一道前置校验。React Flow 默认行为就是允许反向拖动，直到松开时校验。但拖动过程中的错误日志已经污染 Console。
+
+**修法**：
+- 方向 A：加 `isValidConnection` prop 到 ReactFlow 组件（v12 支持），拖拽过程中就拒绝反向连线
+- 方向 B：改 Handle 组件的 `type` 属性严格化
+
+**预估成本**：30 分钟。
+
+**非阻塞**：不影响功能正确性，只是 Console 观感问题。
+
 ## [P2] 展开态子画布视觉质量提升（流水线布局 + 直角折线）
 
 **触发时机**：A-5 完成后的 A-cleanup，或 B/E 组结束后评估是否并入"结构图导出"feature（见下方"依赖决策"）。
@@ -241,6 +255,43 @@ Phase 4a 的 14 个复合模块 schema.json 里 sub_nodes 的 position 用了纵
 
 **与 "展开态视觉提升" 的关系**：
 如果采纳"展开态视觉提升（路径 A）"引入自动布局库，schema 里的 position 就变成"用户意图提示"而不是"精确坐标"，本条 backlog 的紧迫性降低。建议两条一起决策。
+
+## [P3] 后端开发环境启动机制混乱
+
+**现状**：
+Phase 4b 开发过程中反复出现"代码已改、后端 API 返回旧结构"的症状。深入调查发现三层问题叠加：
+
+1. **启动脚本环境不一致**：
+   - `setup_conda.ps1` 创建 conda 环境 `defect-detection` 并在其中装依赖
+   - `start_dev.ps1` 启动后端时用 `backend/venv/Scripts/Activate.ps1`（走 venv 路径），不走 conda
+   - 如果用户误用 `start_dev.ps1`，后端跑的是 venv 的 Python，与 conda 环境脱节
+   - 结果：conda 环境里的最新代码改动，在 venv 启动的进程里看不到
+
+2. **后端进程在独立窗口运行（看不到日志）**：
+   - `start_dev.ps1` 用 `Start-Process powershell -ArgumentList "-NoExit"` 另开窗口跑 uvicorn
+   - 主终端看不到后端状态，难以感知"没重启"这件事
+   - 如果那个窗口被误关，后端可能以异常状态残留
+
+3. **uvicorn --reload 在 Windows 下可靠性差**：
+   - Python 的 --reload 依赖文件系统事件
+   - Windows 下某些文件写入方式（特别是"写临时文件+rename"的原子替换）可能不触发事件
+   - Claude Code 的 `str_replace` / `create_file` 工具写文件时 uvicorn 可能收不到通知
+
+**影响**：每次后端代码改动后开发者不知道是不是真的生效，多次浪费时间排查"看起来是前端 bug 实际是后端没重载"。
+
+**触发修复时机**：Phase 5 开始之前（Phase 5 大量改后端代码，累积时间成本不可控）。
+
+**修法候选**：
+- 方向 A（推荐）：统一到 conda 环境，修改 `start_dev.ps1` 的 `Start-Backend` 走 `conda activate defect-detection` 而不是 venv；删除 venv 创建逻辑。另提供一个"前台启动后端"选项（不要 Start-Process 另开窗口），让日志在主终端可见
+- 方向 B：保留 venv 路径但和 conda 二选一，让脚本有 `-Env conda|venv` 参数
+- 方向 C：引入 watchfiles 或 watchdog 替代 uvicorn 默认 reloader
+
+**预估成本**：方向 A 约 1-2 小时（改脚本 + 文档 + 验证）。
+
+**开发流程临时规范**（在修复之前）：
+- 每次涉及后端代码改动的 Claude Code 会话完成后，用户**手动重启后端**：`taskkill /PID <后端PID> /F` + `conda activate defect-detection` + `cd backend && python -m uvicorn app.main:app --reload`
+- 不要用 `start_dev.ps1` 启动后端（临时）
+- 这条临时规范写进 docs/qa-scripts.md
 
 ## [P3] 模块详情 API 缓存粒度
 
