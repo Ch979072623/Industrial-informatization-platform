@@ -359,9 +359,19 @@ function ModelCanvasInner({
     }
   }, [selectedNode, deleteSelectedNode, deleteSelectedEdges]);
 
-  // 键盘快捷键
-  const onKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
+  // window 级快捷键监听
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Guard：避免在输入框/可编辑区域触发全局快捷键
+      const target = event.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedNode) {
           deleteSelectedNode();
@@ -381,16 +391,16 @@ function ModelCanvasInner({
         event.preventDefault();
         onSave?.();
       }
-    },
-    [selectedNode, deleteSelectedNode, deleteSelectedEdges, undo, redo, onSave]
-  );
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNode, deleteSelectedNode, deleteSelectedEdges, undo, redo, onSave]);
 
   return (
     <div
       ref={reactFlowWrapper}
       className={cn('flex-1 h-full', className)}
-      onKeyDown={onKeyDown}
-      tabIndex={0}
     >
       <ReactFlow
         nodes={nodes}

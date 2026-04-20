@@ -145,3 +145,53 @@ describe('ModelCanvas toolbar', () => {
     expect(edges[0].id).toBe('e2');
   });
 });
+
+describe('ModelCanvas window hotkeys', () => {
+  beforeEach(() => {
+    useModelBuilderStore.setState({
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+      history: [],
+      historyIndex: -1,
+      moduleSchemas: {},
+      moduleSchemaLoading: {},
+      moduleSchemaError: {},
+      updateNodeInternalsRef: null,
+      viewport: undefined,
+    });
+  });
+
+  it('input 聚焦时 Delete 不触发画布删除', () => {
+    useModelBuilderStore.setState({
+      edges: [{ id: 'e1', source: 'n1', target: 'n2', selected: true }],
+    });
+    render(<ModelCanvas />);
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+
+    expect(useModelBuilderStore.getState().edges).toHaveLength(1);
+
+    document.body.removeChild(input);
+  });
+
+  it('非 input 焦点时 Ctrl+Z 触发 undo', () => {
+    useModelBuilderStore.setState({
+      nodes: [{ id: 'n1', position: { x: 0, y: 0 }, type: 'module', data: {} } as unknown as RFNode],
+      history: [
+        { nodes: [], edges: [] },
+        { nodes: [{ id: 'n1', position: { x: 0, y: 0 }, type: 'module', data: {} } as unknown as RFNode], edges: [] },
+      ],
+      historyIndex: 1,
+    });
+    render(<ModelCanvas />);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+
+    expect(useModelBuilderStore.getState().historyIndex).toBe(0);
+  });
+});
