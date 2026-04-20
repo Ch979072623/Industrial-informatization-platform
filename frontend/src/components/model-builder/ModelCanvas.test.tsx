@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { isValidConnection, ModelCanvas } from './ModelCanvas';
 import { useModelBuilderStore } from '@/stores/modelBuilderStore';
 import type { RFNode, ModelNodeData } from '@/types/mlModule';
+import type { Edge, Node } from '@xyflow/react';
 
 vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
@@ -15,6 +16,33 @@ class ResizeObserverMock {
   disconnect() {}
 }
 window.ResizeObserver = ResizeObserverMock;
+
+// 为 onEdgeClick / onNodeClick 测试提供可控的 React Flow 渲染
+vi.mock('@xyflow/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@xyflow/react')>();
+  return {
+    ...actual,
+    ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    ReactFlow: vi.fn(({ onEdgeClick, onNodeClick, onPaneClick, children }) => (
+      <div data-testid="react-flow-mock">
+        <button data-testid="mock-edge" onClick={(e) => onEdgeClick?.(e, { id: 'e1', source: 'n1', target: 'n2' } as unknown as Edge)}>Edge</button>
+        <button data-testid="mock-node" onClick={(e) => onNodeClick?.(e, { id: 'n1', position: { x: 0, y: 0 }, type: 'module', data: {} } as unknown as Node)}>Node</button>
+        <button data-testid="mock-pane" onClick={() => onPaneClick?.()}>Pane</button>
+        {children}
+      </div>
+    )),
+    useReactFlow: () => ({
+      screenToFlowPosition: (pos: { x: number; y: number }) => pos,
+      fitView: vi.fn(),
+      setViewport: vi.fn(),
+    }),
+    useUpdateNodeInternals: () => vi.fn(),
+    Background: vi.fn(() => null),
+    Controls: vi.fn(() => null),
+    MiniMap: vi.fn(() => null),
+    Panel: vi.fn(({ children }: { children: React.ReactNode }) => <>{children}</>),
+  };
+});
 
 function makeNode(id: string, inputPorts: string[], outputPorts: string[]): RFNode {
   const data: ModelNodeData = {
@@ -223,5 +251,31 @@ describe('ModelCanvas window hotkeys', () => {
 
     expect(preventDefaultSpy).toHaveBeenCalled();
     expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('点击 edge 时清除节点选中状态', () => {
+    const onNodeSelect = vi.fn();
+    useModelBuilderStore.setState({
+      nodes: [{ id: 'n1', position: { x: 0, y: 0 }, type: 'module', data: {} } as unknown as RFNode],
+      edges: [{ id: 'e1', source: 'n1', target: 'n2' }],
+    });
+    render(<ModelCanvas onNodeSelect={onNodeSelect} />);
+
+    const edgeBtn = screen.getByTestId('mock-edge');
+    fireEvent.click(edgeBtn);
+    expect(onNodeSelect).toHaveBeenCalledWith(null);
+  });
+
+  it('Ctrl+点击 edge 时保留节点选中状态', () => {
+    const onNodeSelect = vi.fn();
+    useModelBuilderStore.setState({
+      nodes: [{ id: 'n1', position: { x: 0, y: 0 }, type: 'module', data: {} } as unknown as RFNode],
+      edges: [{ id: 'e1', source: 'n1', target: 'n2' }],
+    });
+    render(<ModelCanvas onNodeSelect={onNodeSelect} />);
+
+    const edgeBtn = screen.getByTestId('mock-edge');
+    fireEvent.click(edgeBtn, { ctrlKey: true });
+    expect(onNodeSelect).not.toHaveBeenCalled();
   });
 });

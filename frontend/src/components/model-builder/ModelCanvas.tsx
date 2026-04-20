@@ -323,6 +323,18 @@ function ModelCanvasInner({
     onNodeSelect?.(null);
   }, [onNodeSelect]);
 
+  // 处理 edge 点击：单选时清除节点选中，多选（Ctrl/Meta）时保留
+  const onEdgeClick = useCallback(
+    (event: React.MouseEvent, __edge: RFEdge) => {
+      if (event.ctrlKey || event.metaKey) {
+        return;
+      }
+      setSelectedNode(null);
+      onNodeSelect?.(null);
+    },
+    [onNodeSelect]
+  );
+
   // 删除选中的节点
   const deleteSelectedNode = useCallback(() => {
     if (selectedNode) {
@@ -418,6 +430,7 @@ function ModelCanvasInner({
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClickHandler}
         onPaneClick={onPaneClick}
+        onEdgeClick={onEdgeClick}
         onDragOver={onDragOver}
         onDrop={onDrop}
         onMoveEnd={(_, vp) => setViewport(vp)}
