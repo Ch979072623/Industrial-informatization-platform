@@ -112,89 +112,53 @@ ESLint 的 `@typescript-eslint/no-unused-vars` 规则可以通过下划线或 es
 
 **预估成本**：评估 tsconfig 影响 30 分钟，改动本身 5 分钟。
 
-## cleanup 合集 · 触发时机：A-5 取消后启动 · 2026-04-20] 画布 UX 小 bug
+## [已关闭 · 2026-04-20] A-cleanup 合集（A 组收尾）
 
-**触发时机**：Phase 4b A 组（画布展开/折叠重构）A-5 完成后，A-cleanup 阶段一次性统一修。
+本合集的 6 个子项在 Phase 4b A 组 A-cleanup 阶段及后续 hotfix 中处理完毕。A 组结束后关闭。
 
-本合集里的条目如果严重影响 A 组其他施工时，可以提前单独修。否则等 A-cleanup。
+### 子项 1：画布连线无法按 Delete 键删除 ✅
 
-### 子项 1：画布连线无法按 Delete 键删除
+**状态**：A-cleanup 阶段二完成（commit `fb69192`）
+**补充**：HF-1（commit `a807c42`）扩展工具栏垃圾桶按钮也支持删 edge（原提示词 scope 遗漏）
+**补充**：hotfix-3 修复 onEdgeClick 从未注册导致的"选中 edge 时 selectedNode 未清、Delete 误删节点"Phase 4a 遗留 bug
 
-**现状**：选中连线后按 Delete / Backspace 无反应，只能用 Ctrl+Z 回退。
+### 子项 2：刷新后 viewport 不恢复，节点在视口外 ✅
 
-**根因推测**：React Flow 默认支持 Delete 删除，`ModelCanvas.tsx` 的 `deleteKeyCode={['Backspace', 'Delete']}` 配置看似正确，但 `onKeyDown` 里的删除逻辑只处理了 `selectedNode`，没处理选中的 edge。
+**状态**：A-cleanup 阶段三完成（commit `393340a`）
+**方案**：A+B 结合 —— partialize 白名单加入 viewport（持久化）+ mount 时 useRef 闸门单次调用（fitView 兜底）
 
-**修法**：
-- 画布维护 `selectedEdge` 状态，或改用 React Flow 原生的 edge selection
-- `onKeyDown` 里补上删除 edge 的分支
+### 子项 3：dev server 多实例规范性问题 ⏸
 
-**文件**：`frontend/src/components/model-builder/ModelCanvas.tsx`
+**状态**：代码侧无改动，文档侧未完成。挂独立 backlog 条目 "dev server 启动流程规范化写入 qa-scripts.md"（见下方新条目）
 
-**预估成本**：15-30 分钟。
+### 子项 4：vite.config.ts.timestamp-*.mjs 临时文件泄漏 ✅
 
-### 子项 2：刷新后 viewport 不恢复，节点在视口外
+**状态**：A-cleanup 阶段一完成（commit `8ff7808`）
+**方案**：frontend/.gitignore 加规则
 
-**现状**：刷新页面后画布 viewport 回到默认 `(0, 0, zoom=1)`，但节点保留在用户最后拖拽的坐标。用户看到空白画布，需要滚动/缩放才能找到节点。
+### 子项 5：A-3c 错误态未做浏览器 integration 验证 ⏸
 
-**根因推测**：(a) zustand persist 的 partialize 没包含 viewport；(b) 加载 localStorage 草稿时没触发 fitView()。
+**状态**：未做，挂独立 backlog 条目 "A-3c 错误态浏览器验证"（见下方新条目）
 
-**修法**：
-- 方向 A：改 partialize 把 viewport 加入持久化
-- 方向 B：在画布 mount 时调 ReactFlow 的 fitView()
-- 两者可结合
+### 子项 6：反向拖线从 target handle 出发会刷 React Flow Error #008 ✅
 
-**文件**：`frontend/src/stores/modelBuilderStore.ts` + `frontend/src/components/model-builder/ModelCanvas.tsx`
+**状态**：A-cleanup 阶段四完成（commit `97cd0d2`）
+**方案**：方向 A，加 `isValidConnection` prop 到 ReactFlow 组件
+**附加发现**：React Flow v12 的"反向拖线自动交换 source/target"是 UX 改进，用户确认接受
 
-**预估成本**：30 分钟 - 1 小时。
+### A-cleanup hotfix 系列（2026-04-20）
 
-### 子项 3：dev server 多实例规范性问题
+A-cleanup 主交付后用户浏览器验证连续发现 5 个"新功能依赖的旧状态管理缺陷"bug，以独立 commit 修复：
 
-**现状**：开发过程中反复出现 5173/5174/5175 多 vite 实例同时跑的情况。根因是 Claude Code 和用户各自启动 dev server 且没有终止机制。症状：浏览器访问错端口白屏、@vite/client 串线、auth token 对不上。
+- **HF-1**（commit `a807c42`）：工具栏垃圾桶按钮支持 edge 删除
+- **HF-2**（commit `0f6481c`）：全局 hotkey 改 window 级监听 + input/textarea guard
+- **hotfix-2**：Ctrl+S 在 input 内阻止浏览器"另存为网页"（guard 逻辑顺序修正）
+- **hotfix-3**：点击 edge 时清 selectedNode（onEdgeClick 从未注册，Phase 4a 遗留）
+- **hotfix-4**（commit `9892b25`）：刷新后 seed history baseline（history 栈不持久化导致首次 undo 失败）
 
-**修法**：
-- 把"启动 dev server 前检查 5173 占用"的流程写入 `docs/qa-scripts.md`
-- 或在启动脚本里加端口检查
-- 用户侧养成 `netstat -ano | findstr :5173` → `taskkill /PID <PID> /F` 的习惯
+**重要沉淀**：4 轮 hotfix 的共同根因是"新功能依赖的旧状态管理有缺陷"。详见 kickoff-log 章节 16。
 
-**文件**：`docs/qa-scripts.md`（新建或扩充）
-
-**预估成本**：10 分钟写文档。
-
-### 子项 4：vite.config.ts.timestamp-*.mjs 临时文件泄漏
-
-**现状**：`pnpm run dev` 启动时 Vite 会生成 `frontend/vite.config.ts.timestamp-*.mjs` 临时文件。当前没有被 `.gitignore` 忽略，偶尔出现在 `git status` untracked 列表里污染工作区观感。
-
-**修法**：
-- 在 `frontend/.gitignore` 里加一行 `vite.config.ts.timestamp-*.mjs` 或 `*.timestamp-*.mjs`
-- 删除已存在的临时文件（`del frontend\vite.config.ts.timestamp-*.mjs`）
-
-**文件**：`frontend/.gitignore`
-
-**预估成本**：5 分钟。
-
-### 子项 5：A-3c 错误态未做浏览器 integration 验证
-
-**现状**：A-3c 的加载失败 + 重试按钮逻辑只做了单元测试覆盖（mock store 返回 error），没做浏览器真实触发（网络离线 + 刷新）的 integration 验证。代码路径全对但未实地验过。
-
-**修法**：浏览器验证时顺便跑一次"DevTools Network 设 Offline → 展开新的 composite 节点 → 看到加载失败 + 重试按钮"的流程，确认没有视觉 bug 或交互死循环。
-
-**文件**：无改动，仅验证。
-
-**预估成本**：5 分钟（验证通过）；如果发现 bug 视具体情况。
-
-### 子项 6：反向拖线从 target handle 出发会刷 React Flow Error #008
-
-**现状**：用户从复合节点的输入 handle（target 类型）开始拖拽连线时，React Flow 在拖拽过程中每帧尝试构造候选 edge，但 sourceHandle 实际是 target 类型的 Handle，导致 Error #008 "Couldn't create edge for source handle" 刷屏。松开鼠标后无 edge 真的产生（React Flow 内部拒绝），但 Console 已经累积几百条错误日志。
-
-**根因**：`ModelCanvas.tsx` 的 `onConnect` 有 self-loop / targetHandle occupied / cycle 三道校验，但没有"source Handle 必须是 source 类型"这一道前置校验。React Flow 默认行为就是允许反向拖动，直到松开时校验。但拖动过程中的错误日志已经污染 Console。
-
-**修法**：
-- 方向 A：加 `isValidConnection` prop 到 ReactFlow 组件（v12 支持），拖拽过程中就拒绝反向连线
-- 方向 B：改 Handle 组件的 `type` 属性严格化
-
-**预估成本**：30 分钟。
-
-**非阻塞**：不影响功能正确性，只是 Console 观感问题。
+**经验条目**：新功能的 QA 必须走到"依赖的旧状态机制"的边界验证，不能只看新功能自身。
 
 ## [P2] 展开态子画布视觉质量提升（流水线布局 + 直角折线）
 
@@ -401,3 +365,124 @@ React 受控组件的 `value` 由 state 管理，浏览器 input 的原生 undo 
 参数面板下次重度改动时（如 Phase 4b 参数校验增强、或 C 组模型验证返回的参数面板实时推算功能开工时）一并处理。单独为此修改不值得。
 
 **发现来源**：Phase 4b A-cleanup-hotfix 浏览器验证阶段，2026-04-20
+
+## [已落地 · 2026-04-20] 论文源码私有化目录
+
+**位置**：`backend/app/ml/paper_reference/`
+
+**目录结构**：
+- `ultralytics/` — 魔改版 YOLOv11，含论文三模块（PMSFA / FocusFeature / Detect_SASD），用于 Phase 5 模型训练、Phase 6 模型测试、B 组等价性测试
+- `ultralytics-yolo11-20251219/` — 纯净 YOLOv11 基线，用于 Phase 7 剪枝、Phase 8 蒸馏（因剪枝蒸馏需在 YOLO 源码上加文件改东西，单独留一份干净基线）
+- 其他工具脚本：`get_FPS.py` / `get_model_erf.py` / `heatmap.py` / `plot_channel_image.py` / `plot_result.py` / `track.py` / `train.py` / `transform_PGI.py` / `transform_weight.py`
+- `README.md` — 占位 + 目录用途说明（白名单保留，非私有）
+
+**gitignore 规则**：整体 `backend/app/ml/paper_reference/**` 忽略，白名单放行 `!backend/app/ml/paper_reference/README.md`
+
+**用途**：
+- B 组代码生成的等价性测试（PMSFA / FocusFeature / Detect_SASD 三模块的 shape & 数值对比）走**魔改版**（`ultralytics/`）
+- Phase 7 剪枝 / Phase 8 蒸馏走**纯净基线**（`ultralytics-yolo11-20251219/`）
+- 学术追溯：论文核心贡献的"source of truth"参考基线
+
+**关键产品决策**：平台 composite 模块 = 对外 source of truth（已经过等价性测试对齐论文）；论文原版 = 私有保留，仅用于校验。GitHub 开源时其他人不需要论文源码即可使用平台；需要原生 YOLO11 基线时从 Ultralytics 官方获取。
+
+---
+
+## [E 组前置 · 触发时机：E 组开工前（可在 B 组期间提前补 1-2 个）] YOLO11 原生模块补齐
+
+**背景**：
+用户论文以 YOLOv11 为基线进行改进（Phase 5-8 均基于 YOLOv11 结构）。Phase 4b 任务组 E（YAML 导入导出）要支持导入 yolo11.yaml 基线作为起点，但 Phase 4a 实现的 14 个 composite 模块**不包含 YOLO11 原生模块**，需要补齐。
+
+**缺失模块清单**（对照 yolo11.yaml）：
+
+| 模块 | 类型 | 用途 |
+|---|---|---|
+| `Conv`（ultralytics 版） | composite | Conv + BN + SiLU，YOLO 通用基本块（区别于已有 `Conv_GN`） |
+| `C3k2` | composite | YOLO11 引入的新 block |
+| `SPPF` | composite | Spatial Pyramid Pooling Fast（YOLOv5+） |
+| `C2PSA` | composite | YOLO11 特有 PSA 注意力 block |
+| `Detect`（ultralytics 版） | composite | YOLO 原生检测头（区别于项目的 `Detect_SASD`） |
+
+**已有可复用**：`Concat`（原子模块）、`nn.Upsample`（需确认注册名）
+
+**技术路径**：路径 α（平台内重新实现，用户 2026-04-20 决策）
+- 按 ultralytics 源码在项目的 composite 模块体系内重建 schema.json + module.py
+- 每个模块走 Phase 4a 已建立的"论文模块"标准流程（schema.json + module.py + 等价性测试）
+- 优点：学术追溯一致、用户可展开查看内部、不依赖 ultralytics 作为运行时依赖
+- 放弃路径 β（ultralytics passthrough）：会打破"学术追溯"产品主线，用户明确拒绝
+
+**触发时机策略**：
+- **B 组期间可提前补 1-2 个**：B 组代码生成的等价性测试需要样本，补一个如 `C3k2` 作为测试 case 扩展覆盖
+- **E 组开工前必须全部补齐**：yolo11.yaml 导入依赖这些模块全部已注册
+
+**预估成本**：
+- 每个 composite 模块约 1-2 小时（schema 标注 + module.py + 等价性测试）
+- 5 个模块 ≈ 6-10 小时
+- 可分散在 B/C/D 组期间完成
+
+**基线画布落地**：本任务完成后，yolo11 基线画布 = "E 组导入功能加载 yolo11.yaml"，**不是额外独立 feature**
+
+---
+
+## [Phase 4d · 触发时机：Phase 4d 开工] 模块代码浏览器页面
+
+**背景**：
+用户希望在平台内查看 composite 模块的 Python 源码，方便审查实现质量。独立 feature，归入 Phase 4d（模板管理 + 自定义模块）。
+
+**产品定位**：
+- **只读代码浏览器**，不是编辑器
+- 数据源：`backend/app/ml/modules/composite/*/module.py`（用户 2026-04-20 决策为数据源 (a)）
+- **关键副作用**：论文源码从公共代码解耦——GitHub 开源项目时浏览器只展示 composite 实现，论文源码保持私有
+
+**UI 设计要点**：
+- 独立页面（不在模型构建页面内）
+- 左侧：模块名目录树（按类别分组：backbone / neck / head / attention / paper / 其他）
+- 右侧：选中模块 → 展开查看源码
+- 源码高亮（Monaco Editor 或 shiki）
+- AST 分块标注（class 定义 / forward 方法 / `__init__` 等）
+- 权限：管理员可见；普通用户视角需要单独决策
+
+**实现方向（未定）**：
+- 方向 A：后端 API `GET /models/modules/{type}/source` 返回文件纯文本 + AST 元数据，前端用 Monaco 渲染
+- 方向 B：完全前端实现（vite `import.meta.glob` 把模块代码作为 raw text 打包），但需要和 Vite 配置协调
+- 方向 C：后端 API 返回文本，前端用 shiki 高亮（轻量替代 Monaco）
+
+**扩展空间**：
+- 未来可扩展数据源到 (b) 论文源码、(c) ultralytics 源码，但权限需要更严格
+- 可加搜索 / 批注功能
+
+**触发时机**：Phase 4d 开工
+
+**预估成本**：2-3 天（含后端 API、前端组件、权限、AST 解析、高亮集成）
+
+---
+
+## [P3 · 触发时机：Phase 5 开工前] dev server 启动流程规范化写入 qa-scripts.md
+
+**背景**：
+A-cleanup 子项 3 原计划挂入 `docs/qa-scripts.md`，但 A-cleanup 阶段只处理了代码子项（1/2/4/6），文档子项未完成。
+
+**内容**：
+- 启动 dev server 前检查 5173 占用（`netstat -ano | findstr :5173`）
+- Claude Code 启动后立即 Ctrl+C 关闭，避免和用户启动的 dev server 串线
+- 清理残留 vite 进程的命令
+
+**触发时机**：Phase 5 开工前一并写入 qa-scripts.md
+
+**预估成本**：15 分钟写文档
+
+---
+
+## [P3 · 触发时机：A-3c 下次修改时或 Phase 5 开工前] A-3c 错误态浏览器验证
+
+**背景**：
+A-3c 的展开态"加载失败 + 重试"路径只做了单元测试覆盖（mock store 返回 error），未做浏览器 DevTools Network Offline 场景的真实验证。代码路径全对但未实地验过。
+
+**验证动作**：
+- 浏览器 DevTools Network 设 Offline
+- 展开一个新 composite 节点（未加载过 schema）
+- 看到加载失败 UI + 重试按钮
+- 恢复网络 + 点重试 → 正常加载
+
+**触发时机**：A-3c 下次修改时顺手验证；或 Phase 5 开工前统一扫尾
+
+**预估成本**：5 分钟验证；如发现 bug 视情况
