@@ -307,3 +307,60 @@ describe('createOnRehydrateStorageHandler', () => {
     expect(saveHistory).not.toHaveBeenCalled();
   });
 });
+
+describe('modelBuilderStore canvas mode', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useModelBuilderStore.setState({
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+      history: [],
+      historyIndex: -1,
+      moduleSchemas: {},
+      moduleSchemaLoading: {},
+      moduleSchemaError: {},
+      updateNodeInternalsRef: null,
+      mode: 'architecture',
+    });
+  });
+
+  it('默认 mode 为 architecture', () => {
+    expect(useModelBuilderStore.getState().mode).toBe('architecture');
+  });
+
+  it('setMode 切换 mode', () => {
+    const store = useModelBuilderStore.getState();
+    store.setMode('module');
+    expect(useModelBuilderStore.getState().mode).toBe('module');
+  });
+
+  it('initializeModuleCanvas 创建 InputPort + OutputPort 节点', () => {
+    const store = useModelBuilderStore.getState();
+    store.initializeModuleCanvas();
+
+    const state = useModelBuilderStore.getState();
+    expect(state.nodes).toHaveLength(2);
+    expect(state.edges).toHaveLength(0);
+
+    const inputPort = state.nodes.find((n) => n.type === 'input_port');
+    const outputPort = state.nodes.find((n) => n.type === 'output_port');
+
+    expect(inputPort).toBeTruthy();
+    expect(outputPort).toBeTruthy();
+
+    expect(inputPort?.data.moduleType).toBe('InputPort');
+    expect(outputPort?.data.moduleType).toBe('OutputPort');
+  });
+
+  it('initializeArchitectureCanvas 清空画布', () => {
+    const store = useModelBuilderStore.getState();
+    store.initializeModuleCanvas();
+    expect(useModelBuilderStore.getState().nodes).toHaveLength(2);
+
+    store.initializeArchitectureCanvas();
+    const state = useModelBuilderStore.getState();
+    expect(state.nodes).toHaveLength(0);
+    expect(state.edges).toHaveLength(0);
+  });
+});

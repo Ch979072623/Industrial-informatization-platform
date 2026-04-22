@@ -24,6 +24,7 @@ import type { ReactFlowInstance } from '@xyflow/react';
 import { ModuleLibrary } from '@/components/model-builder/ModuleLibrary';
 import { ModelCanvas } from '@/components/model-builder/ModelCanvas';
 import { NodeConfigPanel } from '@/components/model-builder/NodeConfigPanel';
+import { NewCanvasDialog } from '@/components/model-builder/NewCanvasDialog';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { mlModuleApi, modelBuilderApi } from '@/services/api';
 import { useModelBuilderStore } from '@/stores/modelBuilderStore';
@@ -50,6 +51,7 @@ export default function ModelBuilder() {
   const setNodes = useModelBuilderStore((s) => s.setNodes);
   const setEdges = useModelBuilderStore((s) => s.setEdges);
   const setMode = useModelBuilderStore((s) => s.setMode);
+  const mode = useModelBuilderStore((s) => s.mode);
 
   // React Flow instance（用于 fitView）
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -67,6 +69,9 @@ export default function ModelBuilder() {
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [savedConfigs, setSavedConfigs] = useState<ModelBuilderConfig[]>([]);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
+
+  // 新建画布弹窗
+  const [newCanvasDialogOpen, setNewCanvasDialogOpen] = useState(false);
 
   // 从 URL 加载配置
   useEffect(() => {
@@ -256,6 +261,29 @@ export default function ModelBuilder() {
     setLoadDialogOpen(false);
   }, [navigate]);
 
+  const handleNewCanvas = useCallback(() => {
+    // 若画布非空，二次确认
+    if (nodes.length > 0 || edges.length > 0) {
+      if (!window.confirm('当前画布有未保存的内容，是否放弃并创建新画布？')) {
+        return;
+      }
+    }
+    setNewCanvasDialogOpen(true);
+  }, [nodes.length, edges.length]);
+
+  const confirmNewCanvas = useCallback((mode: import('@/types/mlModule').CanvasMode) => {
+    const { setMode, initializeModuleCanvas, initializeArchitectureCanvas } = useModelBuilderStore.getState();
+    setMode(mode);
+    if (mode === 'module') {
+      initializeModuleCanvas();
+    } else {
+      initializeArchitectureCanvas();
+    }
+    setSelectedNode(null);
+    setSelectedModuleDetails(null);
+    toast({ title: '新建画布', description: mode === 'module' ? '已切换到模块编辑模式' : '已切换到架构编辑模式' });
+  }, [toast]);
+
   const handleExport = useCallback(() => {
     const exportData = { nodes, edges, exported_at: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -282,7 +310,7 @@ export default function ModelBuilder() {
   return (
     <ErrorBoundary>
       <div className="flex h-[calc(100vh-4rem)]">
-        <ModuleLibrary onModuleDragStart={handleModuleDragStart} className="w-72 flex-shrink-0" />
+        <ModuleLibrary mode={mode} onModuleDragStart={handleModuleDragStart} className="w-72 flex-shrink-0" />
 
         <ModelCanvas
           onNodeSelect={handleNodeSelect}
@@ -290,6 +318,7 @@ export default function ModelBuilder() {
           onSave={handleSave}
           onLoad={handleLoad}
           onExport={handleExport}
+          onNewCanvas={handleNewCanvas}
           onInit={handleInit}
           className="flex-1"
         />
@@ -300,6 +329,13 @@ export default function ModelBuilder() {
           onParamChange={handleParamChange}
           onClose={handleCloseConfigPanel}
           className="flex-shrink-0"
+        />
+
+        {/* 新建画布弹窗 */}
+        <NewCanvasDialog
+          open={newCanvasDialogOpen}
+          onOpenChange={setNewCanvasDialogOpen}
+          onConfirm={confirmNewCanvas}
         />
 
         {/* 保存对话框 */}

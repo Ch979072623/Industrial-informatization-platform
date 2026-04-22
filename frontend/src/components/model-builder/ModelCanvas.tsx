@@ -29,13 +29,14 @@ import {
   BackgroundVariant,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Undo2, Redo2, Trash2, Save, FolderOpen, Download, MousePointer2 } from 'lucide-react';
+import { Undo2, Redo2, Trash2, Save, FolderOpen, Download, MousePointer2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 import { useToast } from '@/hooks/use-toast';
 import { useModelBuilderStore } from '@/stores/modelBuilderStore';
 import AtomicNode from './AtomicNode';
 import CompositeNode from './CompositeNode';
+import { InputPortNode, OutputPortNode } from './PortNode';
 import type { ModuleDefinition, RFNode, RFEdge, ModelNodeData } from '@/types/mlModule';
 
 /**
@@ -66,6 +67,8 @@ function ModuleNode(props: NodeProps) {
 // 节点类型注册（保持 'module' 键名不变，兼容已持久化数据）
 const nodeTypes = {
   module: ModuleNode,
+  input_port: InputPortNode,
+  output_port: OutputPortNode,
 };
 
 interface ModelCanvasProps {
@@ -79,6 +82,8 @@ interface ModelCanvasProps {
   onLoad?: () => void;
   /** 导出回调 */
   onExport?: () => void;
+  /** 新建画布回调 */
+  onNewCanvas?: () => void;
   /** React Flow 初始化完成回调（用于外部调 fitView 等） */
   onInit?: (instance: ReactFlowInstance) => void;
   /** 自定义类名 */
@@ -96,6 +101,7 @@ function ModelCanvasInner({
   onSave,
   onLoad,
   onExport,
+  onNewCanvas,
   onInit,
   className,
 }: ModelCanvasProps) {
@@ -167,13 +173,39 @@ function ModelCanvasInner({
       if (!moduleData) return;
 
       try {
-        const module: ModuleDefinition = JSON.parse(moduleData);
+        const module = JSON.parse(moduleData) as ModuleDefinition & { __portType?: 'input_port' | 'output_port' };
 
         // 计算画布坐标（RF12 screenToFlowPosition 期望屏幕坐标）
         const position = screenToFlowPosition({
           x: event.clientX,
           y: event.clientY,
         });
+
+        // 端口节点特殊处理
+        if (module.__portType) {
+          const portType = module.__portType;
+          const newNode: RFNode = {
+            id: `${portType}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            type: portType,
+            position,
+            data: {
+              moduleType: portType === 'input_port' ? 'InputPort' : 'OutputPort',
+              moduleName: portType === 'input_port' ? 'InputPort' : 'OutputPort',
+              displayName: portType === 'input_port' ? '输入端口' : '输出端口',
+              parameters: { name: portType === 'input_port' ? 'x' : 'out' },
+              inputPorts: portType === 'input_port' ? [] : [{ name: 'in', type: 'tensor' }],
+              outputPorts: portType === 'input_port' ? [{ name: 'out', type: 'tensor' }] : [],
+              icon: portType === 'input_port' ? 'ArrowRight' : 'ArrowLeft',
+            },
+          };
+          setNodes((nds) => [...nds, newNode]);
+          saveHistory();
+          toast({
+            title: '添加成功',
+            description: `已添加 ${portType === 'input_port' ? '输入端口' : '输出端口'}`,
+          });
+          return;
+        }
 
         // 创建新节点
         const newNode: RFNode = {
@@ -516,6 +548,15 @@ function ModelCanvasInner({
               title="导出"
             >
               <Download className="h-4 w-4" />
+            </Button>
+            <div className="w-px h-4 bg-border mx-1" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onNewCanvas}
+              title="新建画布"
+            >
+              <Plus className="h-4 w-4" />
             </Button>
           </div>
         </Panel>

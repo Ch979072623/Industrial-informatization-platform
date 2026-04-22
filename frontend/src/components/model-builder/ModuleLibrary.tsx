@@ -33,7 +33,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/utils/cn';
 import { mlModuleApi } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
-import type { ModuleDefinition, ModuleCategory } from '@/types/mlModule';
+import type { ModuleDefinition, ModuleCategory, CanvasMode } from '@/types/mlModule';
 
 // 图标映射
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -68,6 +68,8 @@ interface ModuleLibraryProps {
   onModuleDragStart: (module: ModuleDefinition) => void;
   /** 点击模块回调（可选） */
   onModuleClick?: (module: ModuleDefinition) => void;
+  /** 画布模式 */
+  mode?: CanvasMode;
   /** 自定义类名 */
   className?: string;
 }
@@ -80,6 +82,7 @@ interface ModuleLibraryProps {
 export function ModuleLibrary({
   onModuleDragStart,
   onModuleClick,
+  mode = 'architecture',
   className
 }: ModuleLibraryProps) {
   const [modules, setModules] = useState<ModuleDefinition[]>([]);
@@ -142,6 +145,15 @@ export function ModuleLibrary({
     onModuleDragStart(module);
   };
 
+  // 端口节点拖拽
+  const handlePortDragStart = (e: React.DragEvent, portType: 'input_port' | 'output_port') => {
+    e.dataTransfer.setData('application/reactflow', JSON.stringify({
+      __portType: portType,
+      display_name: portType === 'input_port' ? '输入端口' : '输出端口',
+    }));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
   // 获取分类图标组件
   const getCategoryIcon = (iconName: string) => {
     const IconComponent = ICON_MAP[iconName] || Box;
@@ -178,6 +190,29 @@ export function ModuleLibrary({
     }
     return groups;
   }, [modules, searchQuery]);
+
+  // 渲染端口伪模块卡片
+  const renderPortCard = (portType: 'input_port' | 'output_port', label: string, colorClass: string) => (
+    <div
+      key={portType}
+      draggable
+      onDragStart={(e) => handlePortDragStart(e, portType)}
+      className={cn(
+        'flex items-center gap-3 p-3 rounded-lg border cursor-move',
+        'bg-card hover:bg-accent hover:border-primary/50',
+        'transition-all duration-200',
+        'active:cursor-grabbing'
+      )}
+    >
+      <div className={cn('flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center', colorClass)}>
+        <span className="text-xs font-bold text-white">{portType === 'input_port' ? 'IN' : 'OUT'}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium truncate">{label}</div>
+        <div className="text-xs text-muted-foreground truncate">{portType === 'input_port' ? 'InputPort' : 'OutputPort'}</div>
+      </div>
+    </div>
+  );
 
   // 渲染模块卡片
   const renderModuleCard = (module: ModuleDefinition) => (
@@ -254,6 +289,15 @@ export function ModuleLibrary({
       {/* 模块列表 */}
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-2">
+          {/* Module 模式：顶部显示端口节点 */}
+          {mode === 'module' && (
+            <div className="space-y-1 pb-2 border-b">
+              <div className="text-xs font-medium text-muted-foreground px-2 py-1">端口节点</div>
+              {renderPortCard('input_port', '输入端口', 'bg-blue-500')}
+              {renderPortCard('output_port', '输出端口', 'bg-green-500')}
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
