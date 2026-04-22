@@ -137,6 +137,11 @@ export default function ModelBuilder() {
     setSelectedNode(node);
 
     if (node) {
+      // Port 节点没有 ModuleDefinition，跳过拉取
+      if (node.type === 'input_port' || node.type === 'output_port') {
+        setSelectedModuleDetails(null);
+        return;
+      }
       try {
         const moduleType = node.data.moduleType as string;
         if (!moduleType) {
