@@ -32,6 +32,67 @@ interface NodeConfigPanelProps {
   className?: string;
 }
 
+/** Port 节点（InputPort / OutputPort）精简参数表单 */
+function PortConfigForm({
+  node,
+  onParamChange,
+  onClose,
+  className,
+}: {
+  node: RFNode;
+  onParamChange: (nodeId: string, params: Record<string, unknown>) => void;
+  onClose: () => void;
+  className?: string;
+}) {
+  const [name, setName] = useState('');
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const params = (node.data.parameters as Record<string, unknown>) || {};
+    setName(String(params.name ?? ''));
+  }, [node.id]);
+
+  const handleApply = useCallback(() => {
+    onParamChange(node.id, { name });
+    toast({ title: '参数已更新', description: '端口名称已保存' });
+  }, [node.id, name, onParamChange, toast]);
+
+  const label = node.type === 'input_port' ? '输入端口' : '输出端口';
+
+  return (
+    <div className={cn('flex flex-col h-full bg-card border-l w-[320px]', className)}>
+      <div className="flex items-center justify-between p-4 border-b">
+        <div>
+          <h2 className="text-lg font-semibold">参数配置</h2>
+          <p className="text-xs text-muted-foreground">{label}</p>
+        </div>
+        <Button variant="ghost" size="icon" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">端口名称</Label>
+            <Input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={node.type === 'input_port' ? 'x' : 'out'}
+            />
+          </div>
+        </div>
+      </ScrollArea>
+
+      <div className="p-4 border-t space-y-2">
+        <Button className="w-full" onClick={handleApply}>应用更改</Button>
+        <Button variant="outline" className="w-full" onClick={onClose}>取消</Button>
+      </div>
+    </div>
+  );
+}
+
 function extractDefaults(paramsSchema: ParamSchema[]): Record<string, unknown> {
   const d: Record<string, unknown> = {};
   for (const p of paramsSchema) {
@@ -299,6 +360,18 @@ export function NodeConfigPanel({
           <p>双击节点或点击节点以编辑参数</p>
         </div>
       </div>
+    );
+  }
+
+  // Port 节点走精简渲染
+  if (node.type === 'input_port' || node.type === 'output_port') {
+    return (
+      <PortConfigForm
+        node={node}
+        onParamChange={onParamChange}
+        onClose={onClose}
+        className={className}
+      />
     );
   }
 
