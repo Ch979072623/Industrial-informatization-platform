@@ -14,7 +14,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { applyNodeChanges, applyEdgeChanges, type NodeChange, type EdgeChange, type Viewport } from '@xyflow/react';
 import { mlModuleApi } from '@/services/api';
-import type { RFNode, RFEdge, ModuleSchemaDetail, SubNode, SubEdge } from '@/types/mlModule';
+import type { RFNode, RFEdge, ModuleSchemaDetail, SubNode, SubEdge, CanvasMode } from '@/types/mlModule';
 
 export interface ModelBuilderState {
   nodes: RFNode[];
@@ -23,6 +23,8 @@ export interface ModelBuilderState {
   selectedNodeId: string | null;
   history: { nodes: RFNode[]; edges: RFEdge[] }[];
   historyIndex: number;
+  /** 画布模式 */
+  mode: CanvasMode;
 
   /** 模块 schema 运行时缓存（key = moduleType） */
   moduleSchemas: Record<string, ModuleSchemaDetail>;
@@ -39,12 +41,15 @@ export interface ModelBuilderState {
 
   setSelectedNodeId: (id: string | null) => void;
   setViewport: (viewport: Viewport) => void;
+  setMode: (mode: CanvasMode) => void;
   saveHistory: () => void;
   undo: () => void;
   redo: () => void;
   canUndo: () => boolean;
   canRedo: () => boolean;
   clearCanvas: () => void;
+  initializeModuleCanvas: () => void;
+  initializeArchitectureCanvas: () => void;
 
   toggleCollapse: (nodeId: string) => void;
   markSubLoaded: (nodeId: string) => void;
@@ -62,6 +67,10 @@ const MAX_HISTORY = 20;
 export function createOnRehydrateStorageHandler() {
   return (state: ModelBuilderState | undefined, error?: unknown) => {
     if (error) return;
+    // 向后兼容：旧持久化数据没有 mode，默认 'architecture'
+    if (state && !state.mode) {
+      state.mode = 'architecture';
+    }
     if (state && state.history.length === 0) {
       state.saveHistory();
     }
@@ -76,6 +85,7 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
       selectedNodeId: null,
       history: [],
       historyIndex: -1,
+      mode: 'architecture' as CanvasMode,
       moduleSchemas: {},
       moduleSchemaLoading: {},
       moduleSchemaError: {},
@@ -105,6 +115,8 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
       setSelectedNodeId: (id) => set({ selectedNodeId: id }),
 
       setViewport: (viewport) => set({ viewport }),
+
+      setMode: (mode) => set({ mode }),
 
       saveHistory: () =>
         set((state) => {
@@ -148,6 +160,59 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
 
       clearCanvas: () =>
         set({
+          nodes: [],
+          edges: [],
+          selectedNodeId: null,
+          history: [],
+          historyIndex: -1,
+        }),
+
+      initializeModuleCanvas: () => {
+        const ts = Date.now();
+        set({
+          mode: 'module',
+          nodes: [
+            {
+              id: `input_${ts}`,
+              type: 'input_port',
+              position: { x: 80, y: 200 },
+              data: {
+                moduleType: 'input_port',
+                moduleName: 'InputPort',
+                displayName: '输入端口',
+                parameters: {},
+                inputPorts: [],
+                outputPorts: [{ name: 'out', type: 'tensor' }],
+                portName: 'x',
+                isComposite: false,
+              },
+            },
+            {
+              id: `output_${ts}`,
+              type: 'output_port',
+              position: { x: 400, y: 200 },
+              data: {
+                moduleType: 'output_port',
+                moduleName: 'OutputPort',
+                displayName: '输出端口',
+                parameters: {},
+                inputPorts: [{ name: 'in', type: 'tensor' }],
+                outputPorts: [],
+                portName: 'out',
+                isComposite: false,
+              },
+            },
+          ] as RFNode[],
+          edges: [],
+          selectedNodeId: null,
+          history: [],
+          historyIndex: -1,
+        });
+      },
+
+      initializeArchitectureCanvas: () =>
+        set({
+          mode: 'architecture',
           nodes: [],
           edges: [],
           selectedNodeId: null,
@@ -260,6 +325,7 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
         }),
         edges: state.edges,
         viewport: state.viewport,
+        mode: state.mode,
       }),
       onRehydrateStorage: createOnRehydrateStorageHandler,
     }

@@ -49,6 +49,7 @@ export default function ModelBuilder() {
   const edges = useModelBuilderStore((s) => s.edges);
   const setNodes = useModelBuilderStore((s) => s.setNodes);
   const setEdges = useModelBuilderStore((s) => s.setEdges);
+  const setMode = useModelBuilderStore((s) => s.setMode);
 
   // React Flow instance（用于 fitView）
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -93,9 +94,14 @@ export default function ModelBuilder() {
         console.log('[DEBUG] nodes before set:', arch?.nodes?.length);
         console.log('[DEBUG] edges before set:', arch?.edges?.length);
 
+        // 向后兼容：旧数据没有 mode 时默认 'architecture'
+        const loadedMode = arch?.metadata?.mode || 'architecture';
+        setMode(loadedMode);
+
         const loadedNodes = (arch?.nodes || []).map((node: ModelNode) => ({
           ...node,
-          type: 'module' as const,
+          // 向后兼容：旧数据节点 type 可能缺失，默认 'module'
+          type: node.type || 'module',
         })) as unknown as RFNode[];
         const loadedEdges = (arch?.edges || []) as unknown as RFEdge[];
 
@@ -209,10 +215,11 @@ export default function ModelBuilder() {
     }
     try {
       setSaving(true);
+      const mode = useModelBuilderStore.getState().mode;
       const configData: ModelBuilderConfigCreate = {
         name: saveFormData.name,
         description: saveFormData.description || undefined,
-        architecture_json: { nodes: nodes as unknown as ModelNode[], edges: edges as unknown as ModelEdge[], metadata: { description: saveFormData.description || undefined } },
+        architecture_json: { nodes: nodes as unknown as ModelNode[], edges: edges as unknown as ModelEdge[], metadata: { description: saveFormData.description || undefined, mode } },
         is_public: false,
       };
       const response = await modelBuilderApi.createConfig(configData);

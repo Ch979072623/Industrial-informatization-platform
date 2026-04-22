@@ -150,6 +150,9 @@ export interface ModelNodeData {
   /** 是否为复合模块 */
   isComposite?: boolean;
 
+  /** Port 节点专用：端口名称（对应 proxy_inputs/proxy_outputs 的 name） */
+  portName?: string;
+
   /** 运行时状态：复合节点是否折叠。undefined 视为 true（默认折叠）。不持久化。 */
   collapsed?: boolean;
 
@@ -164,7 +167,7 @@ export interface ModelNode {
   /** 节点ID */
   id: string;
   /** 节点类型 */
-  type: 'module';
+  type: 'module' | 'input_port' | 'output_port';
   /** 节点位置 */
   position: {
     x: number;
@@ -191,10 +194,13 @@ export interface ModelEdge {
 
 // ==================== 模型元数据 ====================
 
+export type CanvasMode = 'module' | 'architecture';
+
 export interface ModelMetadata {
   input_shape?: [number, number, number];
   num_classes?: number;
   description?: string;
+  mode?: CanvasMode;
 }
 
 export interface ModelViewport {
@@ -294,7 +300,7 @@ export interface ModelBuilderConfigQuery {
 import type { Node, Edge } from '@xyflow/react';
 
 /** React Flow 节点类型 - 使用 Record<string, unknown> 以满足类型要求 */
-export type RFNode = Node<Record<string, unknown>, 'module'>;
+export type RFNode = Node<Record<string, unknown>, 'module' | 'input_port' | 'output_port'>;
 
 /** React Flow 边类型 */
 export type RFEdge = Edge;

@@ -486,3 +486,71 @@ A-3c 的展开态"加载失败 + 重试"路径只做了单元测试覆盖（mock
 **触发时机**：A-3c 下次修改时顺手验证；或 Phase 5 开工前统一扫尾
 
 **预估成本**：5 分钟验证；如发现 bug 视情况
+
+## [Phase 4d · 触发时机：Phase 4d 开工 OR B 组 MVP 交付后] 模块库扩展：用户上传自定义模块代码
+
+**背景**：
+用户 2026-04-21 提出希望能"自己输入代码注册一个新的原子或模块"，验证后归并到模块库页面扩展方向（而非独立的"模型配置页面"）。
+
+**产品形态**：
+- 模块库（ModuleLibrary 组件）右上角加"注册新模块"按钮
+- 弹窗含：模块名、is_composite 开关、schema_json 编辑器、Python 代码粘贴区
+- 后端验证代码合法性（ast.parse 通过 + import 白名单 + 无副作用）后写入 ModuleDefinition 表
+- 代码文件落地到 `backend/app/ml/runtime/extra_modules/user_uploaded/` 独立子目录
+
+**关联**：Phase 4d 模板管理 + 自定义模块功能；和 B-2 的 generate_module_code 产出共用 extra_modules/ 目录
+
+**触发时机**：Phase 4d 开工；或 B 组 MVP 交付后用户实际有"先上传自定义模块再用"需求时提前
+
+**预估成本**：3-5 天（含代码合法性校验）
+
+
+## [B 组 · 触发时机：B 组 MVP 交付后评估] B-3/5/6 Architecture 部分节奏决定
+
+**背景**：
+G5 决策 MVP 只做 B-0/B-1/B-2/B-4（Module 交付路径）。Architecture 部分（yaml 导出 + 加载测试 + UI）延后评估。
+
+**待评估的事**：
+1. Module MVP 实际使用中是否暴露新需求导致 B-3/5/6 scope 再调整
+2. B-3（Architecture YAML 生成器）是否合并入 E 组 "yaml 导入导出"任务一起做
+3. B-5（YAML 加载测试）的容差策略（是否要做数值等价、还是只验证加载成功）
+4. B-6（UI）的 Module/Architecture 生成按钮是分开还是合并
+
+**触发时机**：B-0/1/2/4 完成后、进入 B-后半前
+
+**预估成本**：待评估决定
+
+
+## [遗留清理 · 触发时机：Phase 5 开工前 OR 代码审查时顺手] 遗留 ORM 表清理
+
+**背景**：
+B-1 + B-1c 侦察发现两张遗留表**无任何代码引用**：
+- `backend/app/models/model_config.py` 的 `ModelConfig` 类（被 `ml_module.ModelBuilderConfig` 替代）
+- `backend/app/models/ml_module.py:14` 的 `MLModule` 类（被 `ModuleDefinition` 替代）
+- `backend/app/db/seeds/ml_modules_seed.py` 的旧种子数据（含 num_layers 等已废弃字段）
+
+**清理动作**：
+- 确认无代码依赖（grep 全项目）
+- 删除 ORM 文件
+- 生成 Alembic migration 删除对应数据库表
+- 删除 seed 文件
+
+**风险**：可能有文档或未来计划依赖这些表；需要和 SQL migration 历史协调
+
+**触发时机**：Phase 5 开工前清理（避免训练系统引入新的陈旧表引用）；或代码审查时顺手做
+
+**预估成本**：2-4 小时（含 migration 验证）
+
+
+## [B-0 · 触发时机：B-0 施工中] Module 画布旧数据向后兼容
+
+**背景**：
+B-0 引入 `mode` 字段后，现有保存的 ModelBuilderConfig 记录没有 mode 字段。B-0 需要向后兼容——旧数据默认按 architecture 处理。
+
+**需要做**：
+- 前端：加载旧 config 时若 metadata.mode 不存在，默认 'architecture'
+- 后端：Pydantic schema 的 mode 字段设 Optional 默认值 'architecture'
+
+**触发时机**：B-0 施工时内联处理
+
+**预估成本**：30 分钟（在 B-0 提示词里作为硬约束写入）
