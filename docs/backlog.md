@@ -554,3 +554,28 @@ B-0 引入 `mode` 字段后，现有保存的 ModelBuilderConfig 记录没有 mo
 **触发时机**：B-0 施工时内联处理
 
 **预估成本**：30 分钟（在 B-0 提示词里作为硬约束写入）
+
+## [B-1 · 触发时机：B-1 起草时] 保存对话框分模式渲染
+
+**背景**：
+B-0 完成后浏览器验证发现当前保存对话框对 Module 和 Architecture 不区分。按 G4=β 决策，Module 画布保存应写入 ModuleDefinition 表（注册为可用模块），Architecture 画布保存写入 ModelBuilderConfig 表（当前行为）。
+
+**需要做**（归入 B-1 前端分支，非独立条目）：
+- 保存对话框读取 store.mode
+- Module 模式：标题"注册为新模块"+ 字段 moduleName/displayName/category/description
+- Architecture 模式：标题"保存模型配置"+ 字段保持当前
+- 调用分支：Module → `POST /api/v1/models/modules`（B-1 后端产出）；Architecture → `POST /api/v1/model-configs`（保持）
+
+**触发时机**：B-1 开工时一起做，不单独立条目
+
+**产生背景**：B-0 浏览器验证阶段识别，避免"前端先改后端后补"造成虚假就绪
+
+## [基建 · 已落地 · 2026-04-21] 提示词模板 v1
+
+**位置**：`docs/private/prompt-template.md`
+
+**内容**：整合 A-1 + hotfix-3/4 + B-0-HF1 经验的统一提示词模板，12 章节结构，适配侦察/施工/hotfix/文档四类任务
+
+**触发改进**：每次 B-1/B-2/B-3... 使用时发现模板漏项，迭代版本号（v2 / v3...）并在 kickoff-log 记录
+
+**成本**：0（本轮已落地）
