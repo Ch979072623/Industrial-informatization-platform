@@ -42,3 +42,8 @@ class ModuleDefinitionDetail(BaseModel):
     schema_json: Dict[str, Any] = Field(..., description="完整模块 schema")
     created_at: Optional[str] = Field(default=None, description="创建时间 ISO 字符串")
     updated_at: Optional[str] = Field(default=None, description="更新时间 ISO 字符串")
+
+
+class ModuleDefinitionResponse(ModuleDefinitionDetail):
+    """创建/更新模块后的响应（与 ModuleDefinitionDetail 同构）"""
+    pass
