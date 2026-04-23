@@ -156,35 +156,6 @@ class CustomModuleCreate(BaseModel):
         return v
 
 
-# ==================== ModuleDefinition 创建 Schema ====================
-
-class ModuleDefinitionCreate(BaseModel):
-    """用户从 Module 画布提交的新模块定义"""
-    
-    # 基本标识
-    type: str = Field(..., min_length=1, max_length=64, description="模块 type（Python class 名），如 PMSFA")
-    display_name: str = Field(..., min_length=1, max_length=128, description="中文显示名，如 并行多尺度特征聚合")
-    category: str = Field(..., description="模块分类：atomic/backbone/neck/head/attention/custom")
-    description: Optional[str] = Field(default=None, max_length=500)
-    
-    # 画布数据
-    nodes: List[ModelNode]
-    edges: List[ModelEdge]
-    
-    # 可选的参数 schema（若用户在画布上声明了对外参数）
-    params_schema: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
-    
-    @field_validator('type')
-    @classmethod
-    def validate_type(cls, v: str) -> str:
-        """验证模块 type（需以大写字母开头的 Python 标识符）"""
-        if not v.isidentifier():
-            raise ValueError('模块 type 必须是有效的 Python 标识符')
-        if not v[0].isupper():
-            raise ValueError('模块 type 需以大写字母开头')
-        return v
-
-
 # ==================== ModelBuilderConfig Schema ====================
 
 class ModelNode(BaseModel):
@@ -315,3 +286,32 @@ class ModelValidationResponse(BaseModel):
     valid: bool = Field(..., description="是否有效")
     errors: List[str] = Field(default_factory=list, description="错误信息列表")
     warnings: List[str] = Field(default_factory=list, description="警告信息列表")
+
+
+# ==================== ModuleDefinition 创建 Schema ====================
+
+class ModuleDefinitionCreate(BaseModel):
+    """用户从 Module 画布提交的新模块定义"""
+
+    # 基本标识
+    type: str = Field(..., min_length=1, max_length=64, description="模块 type（Python class 名），如 PMSFA")
+    display_name: str = Field(..., min_length=1, max_length=128, description="中文显示名，如 并行多尺度特征聚合")
+    category: str = Field(..., description="模块分类：atomic/backbone/neck/head/attention/custom")
+    description: Optional[str] = Field(default=None, max_length=500)
+
+    # 画布数据
+    nodes: List[ModelNode]
+    edges: List[ModelEdge]
+
+    # 可选的参数 schema（若用户在画布上声明了对外参数）
+    params_schema: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+
+    @field_validator('type')
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        """验证模块 type（需以大写字母开头的 Python 标识符）"""
+        if not v.isidentifier():
+            raise ValueError('模块 type 必须是有效的 Python 标识符')
+        if not v[0].isupper():
+            raise ValueError('模块 type 需以大写字母开头')
+        return v

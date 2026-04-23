@@ -7,18 +7,21 @@
 路由前缀: /api/v1/models/modules
 """
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
 from app.core.security import TokenData
 from app.schemas.common import APIResponse
-from app.schemas.module_definition import ModuleDefinitionListItem, ModuleDefinitionDetail
+from app.schemas.module_definition import ModuleDefinitionListItem, ModuleDefinitionDetail, ModuleDefinitionResponse
+from app.schemas.ml_module import ModuleDefinitionCreate, ModelNode
 from app.models.module_definition import ModuleDefinition
 from app.ml.modules.registry import sync_builtin_modules
+from app.ml.modules.canvas_converter import canvas_to_schema, CanvasConversionError
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +171,112 @@ async def get_module_detail(
         )
 
     return APIResponse.success_response(data=_build_detail(module))
+
+
+async def _build_module_resolver(
+    db: AsyncSession,
+    nodes: List[ModelNode],
+) -> Callable[[str], Optional[Dict[str, Any]]]:
+    """预查画布中所有子模块的 schema，返回同步解析器"""
+    types = set()
+    for n in nodes:
+        if n.type not in ("input_port", "output_port"):
+            mt = n.data.get("moduleType") or n.data.get("moduleName")
+            if mt:
+                types.add(mt)
+
+    if not types:
+        return lambda _mt: None
+
+    result = await db.execute(
+        select(ModuleDefinition).where(ModuleDefinition.type.in_(types))
+    )
+    schema_map = {m.type: m.schema_json for m in result.scalars().all()}
+
+    def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+        return schema_map.get(module_type)
+
+    return resolver
+
+
+@router.post("", response_model=APIResponse[ModuleDefinitionResponse])
+async def create_module(
+    payload: ModuleDefinitionCreate,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="权限不足，仅管理员可注册模块",
+        )
+    """
+    从 Module 画布注册新的 composite 模块到 module_definitions 表。
+
+    冲突处理（Q2=δ）：
+    - 若 type 已存在且 source='builtin' → 返回 409 Conflict，建议 type_v2 作为新名
+    - 若 type 已存在且 source='custom' → 允许覆盖（前端应在 UI 加确认弹窗）
+    """
+    # 1. 冲突检测
+    existing_result = await db.execute(
+        select(ModuleDefinition).where(ModuleDefinition.type == payload.type)
+    )
+    existing_row = existing_result.scalar_one_or_none()
+
+    if existing_row and existing_row.source == "builtin":
+        suggested = f"{payload.type}_v2"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "reason": "conflict_with_builtin",
+                "message": f"模块名 '{payload.type}' 已被内置模块占用",
+                "suggested_name": suggested,
+            },
+        )
+
+    # 2. 转换画布数据 → schema_json
+    module_resolver = await _build_module_resolver(db, payload.nodes)
+    try:
+        schema_json = canvas_to_schema(
+            nodes=[n.model_dump() for n in payload.nodes],
+            edges=[e.model_dump() for e in payload.edges],
+            module_resolver=module_resolver,
+        )
+        schema_json["type"] = payload.type
+        schema_json["display_name"] = payload.display_name
+        schema_json["category"] = payload.category
+        schema_json["is_composite"] = True
+        schema_json["params_schema"] = payload.params_schema or []
+        if payload.description:
+            schema_json["description"] = payload.description
+    except CanvasConversionError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    # 3. 写入或覆盖
+    if existing_row:  # source='custom' 情况
+        existing_row.display_name = payload.display_name
+        existing_row.category = payload.category
+        existing_row.schema_json = schema_json
+        existing_row.version += 1
+        await db.commit()
+        await db.refresh(existing_row)
+        resp = APIResponse.success_response(data=_build_detail(existing_row))
+        return JSONResponse(status_code=200, content=resp.model_dump())
+    else:
+        new_module = ModuleDefinition(
+            type=payload.type,
+            display_name=payload.display_name,
+            category=payload.category,
+            schema_json=schema_json,
+            source="custom",
+            created_by=current_user.user_id,
+            version=1,
+        )
+        db.add(new_module)
+        await db.commit()
+        await db.refresh(new_module)
+        resp = APIResponse.success_response(data=_build_detail(new_module))
+        return JSONResponse(status_code=201, content=resp.model_dump())
 
 
 @router.post("/sync", response_model=APIResponse)
