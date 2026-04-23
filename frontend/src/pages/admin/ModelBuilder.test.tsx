@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { useModelBuilderStore } from '@/stores/modelBuilderStore';
-import { mlModuleApi } from '@/services/api';
+import { mlModuleApi, modelBuilderApi } from '@/services/api';
 import type { RFNode } from '@/types/mlModule';
 
 // Mock API
 vi.mock('@/services/api', () => ({
   mlModuleApi: {
     getModule: vi.fn(),
+    createModule: vi.fn(),
+    getModules: vi.fn(),
   },
   modelBuilderApi: {
     getConfigs: vi.fn(),
@@ -16,8 +18,9 @@ vi.mock('@/services/api', () => ({
   },
 }));
 
+const toastMock = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/use-toast', () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: toastMock }),
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -26,7 +29,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('@/components/model-builder/ModelCanvas', () => ({
-  ModelCanvas: ({ onNodeSelect }: { onNodeSelect?: (node: RFNode | null) => void }) => (
+  ModelCanvas: ({ onNodeSelect, onSave }: { onNodeSelect?: (node: RFNode | null) => void; onSave?: () => void }) => (
     <div data-testid="model-canvas">
       <button
         data-testid="select-input-port"
@@ -88,6 +91,7 @@ vi.mock('@/components/model-builder/ModelCanvas', () => ({
       >
         Select Module
       </button>
+      <button data-testid="save-button" onClick={() => onSave?.()}>保存</button>
     </div>
   ),
 }));
@@ -120,6 +124,8 @@ describe('ModelBuilder port node guard', () => {
       mode: 'architecture',
     });
     vi.mocked(mlModuleApi.getModule).mockClear();
+    vi.mocked(mlModuleApi.createModule).mockClear();
+    vi.mocked(modelBuilderApi.createConfig).mockClear();
   });
 
   it('点击 InputPort 节点时不发起模块详情请求', async () => {
@@ -171,6 +177,109 @@ describe('ModelBuilder port node guard', () => {
     await waitFor(() => {
       expect(mlModuleApi.getModule).toHaveBeenCalledOnce();
       expect(mlModuleApi.getModule).toHaveBeenCalledWith('Conv2d');
+    });
+  });
+});
+
+describe('ModelBuilder save dialog branch', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useModelBuilderStore.setState({
+      nodes: [
+        { id: 'n1', type: 'module', position: { x: 0, y: 0 }, data: { moduleType: 'Conv2d', parameters: {} } },
+      ] as unknown as import('@/types/mlModule').RFNode[],
+      edges: [],
+      selectedNodeId: null,
+      history: [],
+      historyIndex: -1,
+      moduleSchemas: {},
+      moduleSchemaLoading: {},
+      moduleSchemaError: {},
+      updateNodeInternalsRef: null,
+      mode: 'architecture',
+    });
+    vi.mocked(mlModuleApi.createModule).mockClear();
+    vi.mocked(modelBuilderApi.createConfig).mockClear();
+  });
+
+  it('Module 模式下打开保存对话框显示注册字段', async () => {
+    useModelBuilderStore.setState({ mode: 'module' });
+    const ModelBuilder = (await import('./ModelBuilder')).default;
+    render(<ModelBuilder />);
+
+    fireEvent.click(screen.getByTestId('save-button'));
+
+    await waitFor(() => {
+      expect(screen.getByText('注册为新模块')).toBeInTheDocument();
+    });
+    expect(screen.getByLabelText('模块名 *')).toBeInTheDocument();
+    expect(screen.getByLabelText('显示名 *')).toBeInTheDocument();
+    expect(screen.getByLabelText('分类 *')).toBeInTheDocument();
+    expect(screen.getByLabelText('描述')).toBeInTheDocument();
+  });
+
+  it('Architecture 模式下打开保存对话框显示原有字段', async () => {
+    const ModelBuilder = (await import('./ModelBuilder')).default;
+    render(<ModelBuilder />);
+
+    fireEvent.click(screen.getByTestId('save-button'));
+
+    await waitFor(() => {
+      expect(screen.getByText('保存模型配置')).toBeInTheDocument();
+    });
+    expect(screen.getByLabelText('配置名称 *')).toBeInTheDocument();
+    expect(screen.getByLabelText('配置描述')).toBeInTheDocument();
+  });
+
+  it('Module 模式点击注册调用 createModule', async () => {
+    useModelBuilderStore.setState({ mode: 'module' });
+    vi.mocked(mlModuleApi.createModule).mockResolvedValue({
+      data: { success: true, data: { type: 'MyBlock' } },
+    } as unknown as Awaited<ReturnType<typeof mlModuleApi.createModule>>);
+    vi.mocked(mlModuleApi.getModules).mockResolvedValue({
+      data: { success: true, data: [] },
+    } as unknown as Awaited<ReturnType<typeof mlModuleApi.getModules>>);
+
+    const ModelBuilder = (await import('./ModelBuilder')).default;
+    render(<ModelBuilder />);
+
+    fireEvent.click(screen.getByTestId('save-button'));
+    await waitFor(() => expect(screen.getByText('注册为新模块')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('模块名 *'), { target: { value: 'MyBlock' } });
+    fireEvent.change(screen.getByLabelText('显示名 *'), { target: { value: '我的模块' } });
+    fireEvent.click(screen.getByText('注册'));
+
+    await waitFor(() => {
+      expect(mlModuleApi.createModule).toHaveBeenCalledOnce();
+    });
+    expect(modelBuilderApi.createConfig).not.toHaveBeenCalled();
+  });
+
+  it('409 冲突时 toast 显示 suggested_name', async () => {
+    useModelBuilderStore.setState({ mode: 'module' });
+    vi.mocked(mlModuleApi.createModule).mockRejectedValue({
+      response: { status: 409, data: { detail: { suggested_name: 'PMSFA_v2' } } },
+    });
+
+    const ModelBuilder = (await import('./ModelBuilder')).default;
+    render(<ModelBuilder />);
+
+    fireEvent.click(screen.getByTestId('save-button'));
+    await waitFor(() => expect(screen.getByText('注册为新模块')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('模块名 *'), { target: { value: 'PMSFA' } });
+    fireEvent.change(screen.getByLabelText('显示名 *'), { target: { value: 'PMSFA' } });
+    fireEvent.click(screen.getByText('注册'));
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '模块名已被占用',
+          description: '建议使用 PMSFA_v2',
+          variant: 'destructive',
+        })
+      );
     });
   });
 });

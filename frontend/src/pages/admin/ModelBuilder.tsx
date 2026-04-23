@@ -19,6 +19,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import type { ReactFlowInstance } from '@xyflow/react';
 import { ModuleLibrary } from '@/components/model-builder/ModuleLibrary';
@@ -31,12 +38,14 @@ import { useModelBuilderStore } from '@/stores/modelBuilderStore';
 import type {
   ModuleDefinition,
   ModuleDefinitionDetail,
+  ModuleDefinitionCreatePayload,
   RFNode,
   RFEdge,
   ModelBuilderConfig,
   ModelBuilderConfigCreate,
   ModelNode,
   ModelEdge,
+  ModuleCategory,
 } from '@/types/mlModule';
 
 export default function ModelBuilder() {
@@ -62,8 +71,15 @@ export default function ModelBuilder() {
 
   // 保存对话框
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [saveFormData, setSaveFormData] = useState({ name: '', description: '' });
+  const [saveFormData, setSaveFormData] = useState({
+    name: '',
+    description: '',
+    type: '',
+    displayName: '',
+    category: 'custom' as ModuleCategory,
+  });
   const [saving, setSaving] = useState(false);
+  const [moduleRefreshKey, setModuleRefreshKey] = useState(0);
 
   // 加载对话框
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
@@ -214,36 +230,87 @@ export default function ModelBuilder() {
       toast({ title: '保存失败', description: '画布为空，无法保存', variant: 'destructive' });
       return;
     }
-    setSaveFormData({ name: '', description: '' });
+    setSaveFormData({ name: '', description: '', type: '', displayName: '', category: 'custom' });
     setSaveDialogOpen(true);
   }, [nodes.length, toast]);
 
   const confirmSave = useCallback(async () => {
-    if (!saveFormData.name.trim()) {
-      toast({ title: '保存失败', description: '请输入配置名称', variant: 'destructive' });
-      return;
-    }
-    try {
-      setSaving(true);
-      const mode = useModelBuilderStore.getState().mode;
-      const configData: ModelBuilderConfigCreate = {
-        name: saveFormData.name,
-        description: saveFormData.description || undefined,
-        architecture_json: { nodes: nodes as unknown as ModelNode[], edges: edges as unknown as ModelEdge[], metadata: { description: saveFormData.description || undefined, mode } },
-        is_public: false,
-      };
-      const response = await modelBuilderApi.createConfig(configData);
-      if (response.data.success) {
-        toast({ title: '保存成功', description: '模型配置已保存到数据库' });
-        setSaveDialogOpen(false);
+    if (mode === 'module') {
+      if (!saveFormData.type.trim()) {
+        toast({ title: '保存失败', description: '请输入模块名', variant: 'destructive' });
+        return;
       }
-    } catch (error) {
-      console.error('保存配置失败:', error);
-      toast({ title: '保存失败', description: '无法保存模型配置', variant: 'destructive' });
-    } finally {
-      setSaving(false);
+      if (!/^[A-Z][a-zA-Z0-9_]*$/.test(saveFormData.type)) {
+        toast({ title: '保存失败', description: '模块名格式不正确（需以大写字母开头的 Python 标识符）', variant: 'destructive' });
+        return;
+      }
+      if (!saveFormData.displayName.trim()) {
+        toast({ title: '保存失败', description: '请输入显示名', variant: 'destructive' });
+        return;
+      }
+      try {
+        setSaving(true);
+        const payload: ModuleDefinitionCreatePayload = {
+          type: saveFormData.type,
+          display_name: saveFormData.displayName,
+          category: saveFormData.category,
+          description: saveFormData.description || undefined,
+          nodes: nodes as unknown as ModelNode[],
+          edges: edges as unknown as ModelEdge[],
+          params_schema: [],
+        };
+        await mlModuleApi.createModule(payload);
+        toast({ title: '注册成功', description: `模块 ${saveFormData.type} 已加入模块库` });
+        try {
+          await mlModuleApi.getModules();
+          setModuleRefreshKey((k) => k + 1);
+        } catch {
+          toast({ title: '注册成功，但模块库刷新失败，请手动刷新' });
+        }
+        setSaveDialogOpen(false);
+      } catch (error) {
+        const axiosError = error as { response?: { status: number; data?: { detail?: { suggested_name?: string } } } };
+        if (axiosError.response?.status === 409) {
+          const suggested = axiosError.response.data?.detail?.suggested_name;
+          toast({
+            title: '模块名已被占用',
+            description: `建议使用 ${suggested}`,
+            variant: 'destructive',
+          });
+        } else {
+          const message = error instanceof Error ? error.message : '注册失败';
+          toast({ title: '注册失败', description: message, variant: 'destructive' });
+        }
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      if (!saveFormData.name.trim()) {
+        toast({ title: '保存失败', description: '请输入配置名称', variant: 'destructive' });
+        return;
+      }
+      try {
+        setSaving(true);
+        const currentMode = useModelBuilderStore.getState().mode;
+        const configData: ModelBuilderConfigCreate = {
+          name: saveFormData.name,
+          description: saveFormData.description || undefined,
+          architecture_json: { nodes: nodes as unknown as ModelNode[], edges: edges as unknown as ModelEdge[], metadata: { description: saveFormData.description || undefined, mode: currentMode } },
+          is_public: false,
+        };
+        const response = await modelBuilderApi.createConfig(configData);
+        if (response.data.success) {
+          toast({ title: '保存成功', description: '模型配置已保存到数据库' });
+          setSaveDialogOpen(false);
+        }
+      } catch (error) {
+        console.error('保存配置失败:', error);
+        toast({ title: '保存失败', description: '无法保存模型配置', variant: 'destructive' });
+      } finally {
+        setSaving(false);
+      }
     }
-  }, [saveFormData, nodes, edges, toast]);
+  }, [saveFormData, nodes, edges, toast, mode]);
 
   const handleLoad = useCallback(async () => {
     try {
@@ -315,7 +382,7 @@ export default function ModelBuilder() {
   return (
     <ErrorBoundary>
       <div className="flex h-[calc(100vh-4rem)]">
-        <ModuleLibrary mode={mode} onModuleDragStart={handleModuleDragStart} className="w-72 flex-shrink-0" />
+        <ModuleLibrary key={moduleRefreshKey} mode={mode} onModuleDragStart={handleModuleDragStart} className="w-72 flex-shrink-0" />
 
         <ModelCanvas
           onNodeSelect={handleNodeSelect}
@@ -347,29 +414,85 @@ export default function ModelBuilder() {
         <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>保存模型配置</DialogTitle>
-              <DialogDescription>将当前模型架构保存到数据库</DialogDescription>
+              <DialogTitle>{mode === 'module' ? '注册为新模块' : '保存模型配置'}</DialogTitle>
+              <DialogDescription>
+                {mode === 'module' ? '将当前画布注册到模块库，可供其他画布复用' : '将当前模型架构保存到数据库'}
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">配置名称 *</Label>
-                <Input
-                  id="name"
-                  placeholder="例如：YOLO11 改进模型"
-                  value={saveFormData.name}
-                  onChange={(e) => setSaveFormData((p) => ({ ...p, name: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">配置描述</Label>
-                <Textarea
-                  id="description"
-                  placeholder="描述这个模型的特点和用途..."
-                  value={saveFormData.description}
-                  onChange={(e) => setSaveFormData((p) => ({ ...p, description: e.target.value }))}
-                  rows={3}
-                />
-              </div>
+              {mode === 'module' ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="type">模块名 *</Label>
+                    <Input
+                      id="type"
+                      placeholder="例如：MyBlock"
+                      value={saveFormData.type}
+                      onChange={(e) => setSaveFormData((p) => ({ ...p, type: e.target.value }))}
+                    />
+                    <p className="text-xs text-muted-foreground">需以大写字母开头的 Python 标识符</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="displayName">显示名 *</Label>
+                    <Input
+                      id="displayName"
+                      placeholder="例如：我的自定义模块"
+                      value={saveFormData.displayName}
+                      onChange={(e) => setSaveFormData((p) => ({ ...p, displayName: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="category">分类 *</Label>
+                    <Select
+                      value={saveFormData.category}
+                      onValueChange={(v) => setSaveFormData((p) => ({ ...p, category: v as ModuleCategory }))}
+                    >
+                      <SelectTrigger id="category">
+                        <SelectValue placeholder="选择分类" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="backbone">骨干网络</SelectItem>
+                        <SelectItem value="neck">颈部网络</SelectItem>
+                        <SelectItem value="head">检测头</SelectItem>
+                        <SelectItem value="attention">注意力</SelectItem>
+                        <SelectItem value="custom">自定义</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">描述</Label>
+                    <Textarea
+                      id="description"
+                      placeholder="描述这个模块的用途..."
+                      value={saveFormData.description}
+                      onChange={(e) => setSaveFormData((p) => ({ ...p, description: e.target.value }))}
+                      rows={3}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="name">配置名称 *</Label>
+                    <Input
+                      id="name"
+                      placeholder="例如：YOLO11 改进模型"
+                      value={saveFormData.name}
+                      onChange={(e) => setSaveFormData((p) => ({ ...p, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">配置描述</Label>
+                    <Textarea
+                      id="description"
+                      placeholder="描述这个模型的特点和用途..."
+                      value={saveFormData.description}
+                      onChange={(e) => setSaveFormData((p) => ({ ...p, description: e.target.value }))}
+                      rows={3}
+                    />
+                  </div>
+                </>
+              )}
               <div className="text-sm text-muted-foreground">
                 <p>节点数量: {nodes.length}</p>
                 <p>连接数量: {edges.length}</p>
@@ -377,7 +500,9 @@ export default function ModelBuilder() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>取消</Button>
-              <Button onClick={confirmSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+              <Button onClick={confirmSave} disabled={saving}>
+                {saving ? (mode === 'module' ? '注册中...' : '保存中...') : (mode === 'module' ? '注册' : '保存')}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

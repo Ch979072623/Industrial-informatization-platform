@@ -295,6 +295,16 @@ export interface ModelBuilderConfigQuery {
   include_public?: boolean;
 }
 
+export interface ModuleDefinitionCreatePayload {
+  type: string;
+  display_name: string;
+  category: ModuleCategory;
+  description?: string;
+  nodes: ModelNode[];
+  edges: ModelEdge[];
+  params_schema: ParamSchema[];
+}
+
 // ==================== React Flow 扩展 ====================
 
 import type { Node, Edge } from '@xyflow/react';

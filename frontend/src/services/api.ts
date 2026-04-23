@@ -409,6 +409,7 @@ export const generationApi = {
 import type {
   ModuleDefinition,
   ModuleDefinitionDetail,
+  ModuleDefinitionCreatePayload,
   MLModuleQuery,
   ConnectionValidationResult,
   ModelValidationResult,
@@ -432,6 +433,10 @@ export const mlModuleApi = {
   // 获取单个模块详情（按 type 查询）
   getModule: (moduleType: string) =>
     api.get<ApiResponse<ModuleDefinitionDetail>>(`/models/modules/${moduleType}`),
+
+  // 从 Module 画布注册新模块
+  createModule: (payload: ModuleDefinitionCreatePayload) =>
+    api.post<ApiResponse<ModuleDefinition>>('/models/modules', payload),
 
   // 验证连接
   validateConnection: (
