@@ -121,6 +121,13 @@ celerybeat.pid
 backend/app/db/migrations/__pycache__/
 backend/app/db/migrations/versions/__pycache__/
 
+# Phase 4b runtime generated files (private)
+backend/app/ml/runtime/extra_modules/**
+backend/app/ml/runtime/configs/**
+# whitelist README placeholders
+!backend/app/ml/runtime/extra_modules/README.md
+!backend/app/ml/runtime/configs/README.md
+
 # Temporary files
 tmp/
 temp/
