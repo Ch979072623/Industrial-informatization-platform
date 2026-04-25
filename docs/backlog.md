@@ -579,3 +579,86 @@ B-0 完成后浏览器验证发现当前保存对话框对 Module 和 Architectu
 **触发改进**：每次 B-1/B-2/B-3... 使用时发现模板漏项，迭代版本号（v2 / v3...）并在 kickoff-log 记录
 
 **成本**：0（本轮已落地）
+
+## [P3 · 触发时机：代码审查时统一回归 / 或 Phase 5 训练 API 引入鉴权时一起改] inline admin 检查回归到 Depends 风格
+
+**背景**：B-1 因 FastAPI 闭包参数 override 在 pytest 中的局限，POST /modules endpoint 采用 `Depends(get_current_user)` + inline `if role != "admin"` 而非 `Depends(require_admin)`。鉴权语义等价但和项目其他 endpoint 风格不一致。
+
+**触发**：Phase 5 训练 API 引入鉴权时统一审视，或代码审查发现风格偏移时
+
+**预估成本**：1-2h（修 fixture override 写法 + 改 endpoint 依赖声明）
+
+
+## [P3 · 触发时机：模块库 UX 优化批次] ModuleLibrary 暴露刷新 API 替代 key 重新挂载
+
+**背景**：B-1 注册新模块后用 `key={moduleRefreshKey}` 触发 ModuleLibrary 重新挂载来刷新列表。副作用：丢失搜索框输入、展开折叠状态、滚动位置。
+
+**改进方向**：ModuleLibrary 用 forwardRef + useImperativeHandle 暴露 reload() 方法，或迁移到 zustand 全局 store
+
+**触发**：用户实际使用中反馈"注册后搜索状态丢失"等问题；或 D 组（节点交互优化）开工
+
+**预估成本**：2-3h
+
+
+## [P3 · 触发时机：Phase 5 开工前 OR 后端测试套件清理批次] backend test_augmentation.py CreateJobRequest 导入失败
+
+**背景**：B-1 阶段零侦察发现 `backend/tests/test_augmentation.py` 因 `CreateJobRequest` 导入失败而无法收集，属于 B-1 之前的遗留问题。
+
+**影响**：后端测试套件不干净，"哪些失败是新引入的哪些是历史遗留"的判断成本累加
+
+**触发**：Phase 5 训练 API 涉及 augmentation job 时一起处理；或后端测试套件统一清理批次
+
+**预估成本**：1-2h（找到 CreateJobRequest 应在哪定义 + 修 import）
+
+## [P3 · 触发时机：dynamic_builder 改动批次或 Phase 5 训练对接时] sub_edges 缺 id 字段
+
+**背景**：B-1 hotfix-3 诊断时发现 canvas_to_schema 写入的 sub_edges 是 `{source, source_port, target, target_port}` 结构，**缺 id 字段**。当前 dynamic_builder 按 source/target 索引消费不需要 id，但未来 sub_edges 级精细操作（如错误定位、序列化往返）会缺 id 而难追溯。
+
+**触发**：dynamic_builder 改动批次；或 Phase 5 训练时序列化 sub_edges 出现追溯需求
+
+**预估成本**：30 分钟（converter 加 id 生成 + 1 条测试）
+
+## [中优先 · 触发时机：B-后半 OR Module 画布功能扩展批次] Module 画布支持子节点参数提升为对外参数
+
+**背景**：
+B-1 浏览器验证（2026-04-21）发现：用户在 Architecture 画布点击 Module 节点（如 AnotherTest）时，参数面板显示"此模块没有可配置参数"。
+
+**根因**：B-1 注册 Module 时 `params_schema: []` 写死，MVP 不支持用户在画布上声明对外参数。但用户体感是 "我的 block 内部 Conv2d 应该能调 in_channels 才对"。
+
+**产品形态需求**：
+- Module 画布上应能选中某个内部子节点的某个参数
+- 标记该参数为"对外暴露"，给一个对外参数名（如 `out_channels` → 暴露为 `c_out`）
+- 注册时 params_schema 自动生成
+- 支持 `${...}` 表达式（如多个子节点共用同一对外参数）
+
+**触发时机**：B 组后半（Architecture YAML + UI 完整化）或 Module 画布功能扩展批次
+
+**预估成本**：1-2 天（前端 UI + 后端 schema 同步 + 测试）
+
+**关联**：和 B-2 代码生成器有交集——生成器需要把对外参数正确传递到子节点的 forward 调用
+
+---
+
+## [P3 · 触发时机：用户登录态相关问题修复批次] 后端重启后前端登录态失效缺乏明确提示
+
+**背景**：B-1-hotfix-3 验证时遇到——后端重启后 SQLite 数据库重建，旧 token 失效。前端 `/api/v1/auth/me` 返回 401，但**没有自动跳转到登录页**，主页"看起来登录了"但所有接口都 401。
+
+**改进方向**：axios interceptor 检测到 401 → 清 localStorage token → 跳转 /login
+
+**触发时机**：用户首次反馈登录态相关问题时；或 Phase 5 引入更多 protected 路由时
+
+**预估成本**：1-2 小时
+
+---
+
+## [P3 · 触发时机：开发环境优化批次] Vite 缓存 ERR_CACHE_READ_FAILURE 自愈机制
+
+**背景**：B-1-hotfix-3 后用户遇到 Vite 预构建缓存损坏（`node_modules/.vite/deps/*.js` 读取失败），症状是动态 import 失败、整个页面打不开。手动 `Remove-Item -Recurse -Force node_modules\.vite` 后解决。
+
+**改进方向**：
+- 在 `start_dev.ps1` 启动脚本里加一条"启动前先清 .vite"的可选步骤
+- 或在 README/qa-scripts 里写明"打不开页面时优先清 .vite"故障排查流程
+
+**触发时机**：开发环境优化批次；或第二次再遇到此问题时
+
+**预估成本**：30 分钟（脚本改动 + 文档）
