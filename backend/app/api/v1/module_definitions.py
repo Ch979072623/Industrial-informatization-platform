@@ -246,6 +246,7 @@ async def create_module(
         schema_json["display_name"] = payload.display_name
         schema_json["category"] = payload.category
         schema_json["is_composite"] = True
+        schema_json["input_ports_dynamic"] = False
         schema_json["params_schema"] = payload.params_schema or []
         if payload.description:
             schema_json["description"] = payload.description
@@ -257,6 +258,7 @@ async def create_module(
         existing_row.display_name = payload.display_name
         existing_row.category = payload.category
         existing_row.schema_json = schema_json
+        existing_row.is_composite = True
         existing_row.version += 1
         await db.commit()
         await db.refresh(existing_row)
@@ -269,6 +271,7 @@ async def create_module(
             category=payload.category,
             schema_json=schema_json,
             source="custom",
+            is_composite=True,
             created_by=current_user.user_id,
             version=1,
         )
