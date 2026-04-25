@@ -282,4 +282,64 @@ describe('ModelBuilder save dialog branch', () => {
       );
     });
   });
+
+  it('新建模块时 toast 显示注册成功', async () => {
+    useModelBuilderStore.setState({ mode: 'module' });
+    vi.mocked(mlModuleApi.createModule).mockResolvedValue({
+      status: 201,
+      data: { success: true, data: { type: 'NewBlock', version: 1 } },
+    } as unknown as Awaited<ReturnType<typeof mlModuleApi.createModule>>);
+    vi.mocked(mlModuleApi.getModules).mockResolvedValue({
+      data: { success: true, data: [] },
+    } as unknown as Awaited<ReturnType<typeof mlModuleApi.getModules>>);
+
+    const ModelBuilder = (await import('./ModelBuilder')).default;
+    render(<ModelBuilder />);
+
+    fireEvent.click(screen.getByTestId('save-button'));
+    await waitFor(() => expect(screen.getByText('注册为新模块')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('模块名 *'), { target: { value: 'NewBlock' } });
+    fireEvent.change(screen.getByLabelText('显示名 *'), { target: { value: '新模块' } });
+    fireEvent.click(screen.getByText('注册'));
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '注册成功',
+          description: '模块 NewBlock 已加入模块库',
+        })
+      );
+    });
+  });
+
+  it('覆盖模块时 toast 显示覆盖成功并带版本号', async () => {
+    useModelBuilderStore.setState({ mode: 'module' });
+    vi.mocked(mlModuleApi.createModule).mockResolvedValue({
+      status: 200,
+      data: { success: true, data: { type: 'ExistingBlock', version: 3 } },
+    } as unknown as Awaited<ReturnType<typeof mlModuleApi.createModule>>);
+    vi.mocked(mlModuleApi.getModules).mockResolvedValue({
+      data: { success: true, data: [] },
+    } as unknown as Awaited<ReturnType<typeof mlModuleApi.getModules>>);
+
+    const ModelBuilder = (await import('./ModelBuilder')).default;
+    render(<ModelBuilder />);
+
+    fireEvent.click(screen.getByTestId('save-button'));
+    await waitFor(() => expect(screen.getByText('注册为新模块')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('模块名 *'), { target: { value: 'ExistingBlock' } });
+    fireEvent.change(screen.getByLabelText('显示名 *'), { target: { value: '已有模块' } });
+    fireEvent.click(screen.getByText('注册'));
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '覆盖成功',
+          description: '模块 ExistingBlock 已更新（v3）',
+        })
+      );
+    });
+  });
 });
