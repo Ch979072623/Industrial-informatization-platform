@@ -435,8 +435,10 @@ export const mlModuleApi = {
     api.get<ApiResponse<ModuleDefinitionDetail>>(`/models/modules/${moduleType}`),
 
   // 从 Module 画布注册新模块
-  createModule: (payload: ModuleDefinitionCreatePayload) =>
-    api.post<ApiResponse<ModuleDefinition>>('/models/modules', payload),
+  createModule: async (payload: ModuleDefinitionCreatePayload) => {
+    const response = await api.post<ApiResponse<ModuleDefinition>>('/models/modules', payload);
+    return { data: response.data, status: response.status };
+  },
 
   // 验证连接
   validateConnection: (

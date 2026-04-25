@@ -259,8 +259,14 @@ export default function ModelBuilder() {
           edges: edges as unknown as ModelEdge[],
           params_schema: [],
         };
-        await mlModuleApi.createModule(payload);
-        toast({ title: '注册成功', description: `模块 ${saveFormData.type} 已加入模块库` });
+        const result = await mlModuleApi.createModule(payload);
+        const isOverride = result.status === 200;
+        toast({
+          title: isOverride ? '覆盖成功' : '注册成功',
+          description: isOverride
+            ? `模块 ${saveFormData.type} 已更新（v${result.data.data?.version ?? '?'}）`
+            : `模块 ${saveFormData.type} 已加入模块库`,
+        });
         try {
           await mlModuleApi.getModules();
           setModuleRefreshKey((k) => k + 1);
