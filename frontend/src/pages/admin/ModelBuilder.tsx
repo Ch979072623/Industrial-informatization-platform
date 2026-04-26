@@ -51,7 +51,7 @@ import type {
 
 export default function ModelBuilder() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const configId = searchParams.get('id');
   const { toast } = useToast();
 
@@ -338,6 +338,9 @@ export default function ModelBuilder() {
         };
         const response = await modelBuilderApi.createConfig(configData);
         if (response.data.success) {
+          if (!configId && response.data.data?.id) {
+            setSearchParams({ id: String(response.data.data.id) });
+          }
           toast({ title: '保存成功', description: '模型配置已保存到数据库' });
           setSaveDialogOpen(false);
         }
