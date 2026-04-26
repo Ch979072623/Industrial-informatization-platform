@@ -134,6 +134,12 @@ export default function ModelBuilder() {
           ...node,
           // 向后兼容：旧数据节点 type 可能缺失，默认 'module'
           type: node.type || 'module',
+          data: {
+            ...node.data,
+            // 向后兼容：旧数据节点可能缺少 section/repeats
+            section: node.data?.section ?? 'backbone',
+            repeats: node.data?.repeats ?? 1,
+          },
         })) as unknown as RFNode[];
         const loadedEdges = (arch?.edges || []) as unknown as RFEdge[];
 
