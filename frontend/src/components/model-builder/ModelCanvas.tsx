@@ -245,7 +245,7 @@ function ModelCanvasInner({
         });
       }
     },
-    [screenToFlowPosition, setNodes, saveHistory, toast]
+    [screenToFlowPosition, setNodes, saveHistory, toast, mode]
   );
 
   // 处理连接（连线）
