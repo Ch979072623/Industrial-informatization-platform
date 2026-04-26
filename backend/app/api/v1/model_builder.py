@@ -512,6 +512,14 @@ async def export_config_yaml(
         output_dir=extra_modules_dir,
     )
 
+    # 将生成的代码内容一并返回，减少前端额外请求
+    for result in codegen_results:
+        if result.get("path") and not result.get("error"):
+            try:
+                result["code"] = Path(result["path"]).read_text(encoding="utf-8")
+            except Exception:
+                result["code"] = None
+
     return APIResponse.success_response(
         data={
             "yaml": yaml_str,

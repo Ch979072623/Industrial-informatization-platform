@@ -505,7 +505,7 @@ export const modelBuilderApi = {
 
   // 导出 YAML
   exportYaml: (configId: string) =>
-    api.get<ApiResponse<{ yaml: string; codegen_results: Array<{ type: string; path?: string; error?: string }> }>>(`/model-configs/${configId}/export-yaml`),
+    api.get<ApiResponse<{ yaml: string; codegen_results: Array<{ type: string; path?: string; error?: string; code?: string }> }>>(`/model-configs/${configId}/export-yaml`),
 };
 
 export default api;
