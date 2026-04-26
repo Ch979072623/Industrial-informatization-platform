@@ -7,10 +7,12 @@
 路由前缀: /api/v1/models/modules
 """
 import logging
+from pathlib import Path
 from typing import List, Dict, Any, Optional, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +24,7 @@ from app.schemas.ml_module import ModuleDefinitionCreate, ModelNode
 from app.models.module_definition import ModuleDefinition
 from app.ml.modules.registry import sync_builtin_modules
 from app.ml.modules.canvas_converter import canvas_to_schema, CanvasConversionError
+from app.ml.runtime.codegen import write_module_file, CodegenError
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +202,32 @@ async def _build_module_resolver(
     return resolver
 
 
+async def _build_codegen_resolver(
+    db: AsyncSession,
+    sub_nodes: List[Dict[str, Any]],
+) -> Callable[[str], Optional[Dict[str, Any]]]:
+    """为代码生成预查所有子 composite 模块的 schema"""
+    types = {n["type"] for n in sub_nodes}
+    if not types:
+        return lambda _t: None
+
+    result = await db.execute(
+        select(ModuleDefinition).where(
+            and_(ModuleDefinition.type.in_(types), ModuleDefinition.is_composite.is_(True))
+        )
+    )
+    schema_map = {m.type: m.schema_json for m in result.scalars().all()}
+
+    def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+        return schema_map.get(module_type)
+
+    return resolver
+
+
+class _GenerateCodeRequest(BaseModel):
+    expand_composites: bool = True
+
+
 @router.post("", response_model=APIResponse[ModuleDefinitionResponse])
 async def create_module(
     payload: ModuleDefinitionCreate,
@@ -254,6 +283,7 @@ async def create_module(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     # 3. 写入或覆盖
+    module = existing_row if existing_row else None
     if existing_row:  # source='custom' 情况
         existing_row.display_name = payload.display_name
         existing_row.category = payload.category
@@ -262,8 +292,7 @@ async def create_module(
         existing_row.version += 1
         await db.commit()
         await db.refresh(existing_row)
-        resp = APIResponse.success_response(data=_build_detail(existing_row))
-        return JSONResponse(status_code=200, content=resp.model_dump())
+        module = existing_row
     else:
         new_module = ModuleDefinition(
             type=payload.type,
@@ -278,8 +307,29 @@ async def create_module(
         db.add(new_module)
         await db.commit()
         await db.refresh(new_module)
-        resp = APIResponse.success_response(data=_build_detail(new_module))
-        return JSONResponse(status_code=201, content=resp.model_dump())
+        module = new_module
+
+    # 4. 代码生成（仅 composite 模块）
+    resp_data = _build_detail(module)
+    if module.is_composite:
+        try:
+            sub_nodes = schema_json.get("sub_nodes", [])
+            codegen_resolver = await _build_codegen_resolver(db, sub_nodes)
+            output_dir = Path(__file__).resolve().parents[3] / "app" / "ml" / "runtime" / "extra_modules"
+            path = write_module_file(
+                schema_json,
+                expand_composites=True,
+                output_dir=output_dir,
+                resolver=codegen_resolver,
+            )
+            relative_path = path.relative_to(Path(__file__).resolve().parents[3])
+            resp_data["codegen_path"] = str(relative_path)
+        except CodegenError as exc:
+            resp_data["codegen_error"] = str(exc)
+
+    resp = APIResponse.success_response(data=resp_data)
+    status_code = 200 if existing_row else 201
+    return JSONResponse(status_code=status_code, content=resp.model_dump())
 
 
 @router.post("/sync", response_model=APIResponse)
@@ -294,3 +344,63 @@ async def trigger_sync(
     """
     await sync_builtin_modules(db)
     return APIResponse.success_response(message="模块同步已触发")
+
+
+@router.post("/{module_id}/generate-code")
+async def regenerate_module_code(
+    module_id: str,
+    request: _GenerateCodeRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """
+    手动重新生成模块代码。
+
+    仅对 source='custom' 的 composite 模块有效。
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="权限不足，仅管理员可重新生成代码",
+        )
+
+    result = await db.execute(
+        select(ModuleDefinition).where(ModuleDefinition.id == module_id)
+    )
+    module = result.scalar_one_or_none()
+
+    if not module:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="模块不存在",
+        )
+
+    if module.source != "custom":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="仅自定义模块支持代码重新生成",
+        )
+
+    if not module.is_composite:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅复合模块支持代码生成",
+        )
+
+    try:
+        sub_nodes = module.schema_json.get("sub_nodes", [])
+        codegen_resolver = await _build_codegen_resolver(db, sub_nodes)
+        output_dir = Path(__file__).resolve().parents[3] / "app" / "ml" / "runtime" / "extra_modules"
+        path = write_module_file(
+            module.schema_json,
+            expand_composites=request.expand_composites,
+            output_dir=output_dir,
+            resolver=codegen_resolver,
+        )
+        relative_path = path.relative_to(Path(__file__).resolve().parents[3])
+        return JSONResponse(status_code=200, content={"path": str(relative_path)})
+    except CodegenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
