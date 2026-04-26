@@ -149,6 +149,9 @@ export function NodeConfigPanel({
   const mode = useModelBuilderStore((s) => s.mode);
   const updateNodeRepeats = useModelBuilderStore((s) => s.updateNodeRepeats);
   const updateNodeSection = useModelBuilderStore((s) => s.updateNodeSection);
+  const currentNodeData = useModelBuilderStore(
+    (s) => s.nodes.find((n) => n.id === node?.id)?.data
+  );
 
   // 节点或模块详情变化时，合并默认值 + 当前值
   useEffect(() => {
@@ -416,7 +419,7 @@ export function NodeConfigPanel({
                   type="number"
                   min={1}
                   step={1}
-                  value={Number(node.data.repeats ?? 1)}
+                  value={Number((currentNodeData?.repeats ?? node.data.repeats) || 1)}
                   onChange={(e) => {
                     const val = parseInt(e.target.value, 10);
                     if (!isNaN(val) && val >= 1) {
@@ -429,7 +432,7 @@ export function NodeConfigPanel({
               <div className="space-y-2">
                 <Label className="text-sm font-medium">分区（section）</Label>
                 <Select
-                  value={String(node.data.section ?? 'backbone')}
+                  value={String(currentNodeData?.section ?? node.data.section ?? 'backbone')}
                   onValueChange={(v) => updateNodeSection(node.id, v as 'backbone' | 'head')}
                 >
                   <SelectTrigger>
