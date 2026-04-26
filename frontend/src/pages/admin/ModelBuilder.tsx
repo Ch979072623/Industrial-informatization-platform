@@ -77,9 +77,13 @@ export default function ModelBuilder() {
     type: '',
     displayName: '',
     category: 'custom' as ModuleCategory,
+    moduleId: '',
   });
   const [saving, setSaving] = useState(false);
   const [moduleRefreshKey, setModuleRefreshKey] = useState(0);
+  const [codegenStatus, setCodegenStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [codegenMessage, setCodegenMessage] = useState('');
+  const [expandComposites, setExpandComposites] = useState(true);
 
   // 加载对话框
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
@@ -230,7 +234,10 @@ export default function ModelBuilder() {
       toast({ title: '保存失败', description: '画布为空，无法保存', variant: 'destructive' });
       return;
     }
-    setSaveFormData({ name: '', description: '', type: '', displayName: '', category: 'custom' });
+    setSaveFormData({ name: '', description: '', type: '', displayName: '', category: 'custom', moduleId: '' });
+    setCodegenStatus('idle');
+    setCodegenMessage('');
+    setExpandComposites(true);
     setSaveDialogOpen(true);
   }, [nodes.length, toast]);
 
@@ -261,6 +268,24 @@ export default function ModelBuilder() {
         };
         const result = await mlModuleApi.createModule(payload);
         const isOverride = result.status === 200;
+        const moduleId = result.data.data?.id;
+        if (moduleId) {
+          setSaveFormData((p) => ({ ...p, moduleId: String(moduleId) }));
+        }
+        // 处理代码生成状态
+        const respData = result.data.data ? (result.data.data as unknown as Record<string, unknown>) : undefined;
+        const codegenError = respData?.codegen_error as string | undefined;
+        const codegenPath = respData?.codegen_path as string | undefined;
+        if (codegenError) {
+          setCodegenStatus('error');
+          setCodegenMessage(`代码生成失败：${codegenError}`);
+          setSaving(false);
+          return;
+        }
+        if (codegenPath) {
+          setCodegenStatus('success');
+          setCodegenMessage(`已生成 ${codegenPath}`);
+        }
         toast({
           title: isOverride ? '覆盖成功' : '注册成功',
           description: isOverride
@@ -317,6 +342,27 @@ export default function ModelBuilder() {
       }
     }
   }, [saveFormData, nodes, edges, toast, mode]);
+
+  const handleRegenerateCode = useCallback(async () => {
+    if (!saveFormData.moduleId) return;
+    try {
+      setSaving(true);
+      setCodegenStatus('idle');
+      setCodegenMessage('');
+      const result = await mlModuleApi.regenerateModuleCode(saveFormData.moduleId, expandComposites);
+      if (result.data.success && result.data.data?.path) {
+        setCodegenStatus('success');
+        setCodegenMessage(`已生成 ${result.data.data.path}`);
+      }
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { detail?: string } } };
+      const detail = axiosError.response?.data?.detail || '重新生成失败';
+      setCodegenStatus('error');
+      setCodegenMessage(`代码生成失败：${detail}`);
+    } finally {
+      setSaving(false);
+    }
+  }, [saveFormData.moduleId, expandComposites]);
 
   const handleLoad = useCallback(async () => {
     try {
@@ -475,6 +521,18 @@ export default function ModelBuilder() {
                       rows={3}
                     />
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      id="expandComposites"
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      checked={expandComposites}
+                      onChange={(e) => setExpandComposites(e.target.checked)}
+                    />
+                    <Label htmlFor="expandComposites" className="text-sm font-normal cursor-pointer">
+                      展开嵌套 composite 子模块
+                    </Label>
+                  </div>
                 </>
               ) : (
                 <>
@@ -503,9 +561,25 @@ export default function ModelBuilder() {
                 <p>节点数量: {nodes.length}</p>
                 <p>连接数量: {edges.length}</p>
               </div>
+              {codegenStatus !== 'idle' && (
+                <div
+                  className={`text-sm p-2 rounded ${
+                    codegenStatus === 'success'
+                      ? 'bg-green-50 text-green-700 border border-green-200'
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}
+                >
+                  {codegenMessage}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>取消</Button>
+              {mode === 'module' && saveFormData.moduleId && (
+                <Button variant="secondary" onClick={handleRegenerateCode} disabled={saving}>
+                  {saving ? '生成中...' : '重新生成代码'}
+                </Button>
+              )}
               <Button onClick={confirmSave} disabled={saving}>
                 {saving ? (mode === 'module' ? '注册中...' : '保存中...') : (mode === 'module' ? '注册' : '保存')}
               </Button>

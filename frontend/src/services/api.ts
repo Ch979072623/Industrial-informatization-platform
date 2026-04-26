@@ -440,6 +440,14 @@ export const mlModuleApi = {
     return { data: response.data, status: response.status };
   },
 
+  // 重新生成模块代码
+  regenerateModuleCode: async (moduleId: string, expandComposites: boolean) => {
+    const response = await api.post<ApiResponse<{ path: string }>>(`/models/modules/${moduleId}/generate-code`, {
+      expand_composites: expandComposites,
+    });
+    return { data: response.data, status: response.status };
+  },
+
   // 验证连接
   validateConnection: (
     sourceModuleId: string,
