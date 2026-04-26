@@ -662,3 +662,35 @@ B-1 浏览器验证（2026-04-21）发现：用户在 Architecture 画布点击 
 **触发时机**：开发环境优化批次；或第二次再遇到此问题时
 
 **预估成本**：30 分钟（脚本改动 + 文档）
+
+明白了，按这个格式重写：
+
+---
+
+## [P2 · 触发时机：B-6 前端代码预览上线前，或用户首次反馈下载的 .py 实例化失败时] codegen 生成类 `__init__` 缺少参数默认值
+
+**背景**：
+B-2 实现的 `generate_module_code` 在展开 composite 子模块时，未将子模块 `params_schema` 的默认值注入生成类的 `__init__` 签名。例如 Conv_GN 的 `p` / `g` 参数有默认值，但生成的 `__init__(self, p, g)` 不含默认值，用户直接实例化 `Conv_GN()` 会报 `TypeError: missing required positional argument`。
+
+B-4 等价性测试中通过测试侧补丁绕过了此问题，未修改生产代码。
+
+**修法**：`generate_module_code` 生成 `__init__` 签名时，从 `params_schema` 读取每个参数的 `default` 字段，有默认值的参数生成 `param=default` 格式。
+
+**触发时机**：B-6 前端代码预览上线前（用户能看到生成代码时此 bug 明显）；或用户首次反馈复制 .py 后实例化报错时。
+
+**预估成本**：1-2 小时（修 codegen.py + 补测试）
+
+---
+
+## [P3 · 触发时机：同上] codegen 生成签名与 `params_schema` 字段对不上
+
+**背景**：
+部分 composite 模块（如 C2f）的 `params_schema` 含有生成类签名未使用的参数（如 `n`）。`generate_module_code` 未做过滤，生成的 `__init__` 签名会包含实际 forward 里用不到的参数，或反之漏掉。
+
+B-4 测试通过 `inspect.signature` 过滤参数绕过了此问题。
+
+**修法**：`generate_module_code` 生成 `__init__` 签名时，只纳入在 `sub_nodes` 参数中实际有 `${var}` 引用的变量名，和 `params_schema` 做交集校验，不一致时抛出 `CodegenError` 提示哪个参数未使用。
+
+**触发时机**：同 BL-codegen-01，两条一起修。
+
+**预估成本**：1-2 小时（和上一条合并处理）
