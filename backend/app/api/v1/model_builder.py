@@ -10,6 +10,7 @@
 6. 生成代码快照
 """
 import logging
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from fastapi import (
@@ -27,6 +28,8 @@ from app.schemas.ml_module import (
     ModelArchitecture
 )
 from app.models.ml_module import ModelBuilderConfig
+from app.models.module_definition import ModuleDefinition
+from app.ml.runtime.yaml_generator import architecture_to_yaml, collect_custom_modules, YamlGeneratorError
 
 logger = logging.getLogger(__name__)
 
@@ -428,5 +431,90 @@ async def get_config_code(
         data={
             "code": config.code_snapshot or "# 暂无代码",
             "language": "python"
+        }
+    )
+
+
+@router.get("/{config_id}/export-yaml")
+async def export_config_yaml(
+    config_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> APIResponse[Dict[str, Any]]:
+    """
+    导出模型配置为 ultralytics 兼容的 YAML 文件
+
+    同时触发 custom composite 模块的代码生成。
+    """
+    result = await db.execute(
+        select(ModelBuilderConfig).where(ModelBuilderConfig.id == config_id)
+    )
+    config = result.scalar_one_or_none()
+
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="配置不存在"
+        )
+
+    # 检查访问权限
+    if (config.created_by != current_user.user_id and
+        not config.is_public and
+        current_user.role != "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权访问此配置"
+        )
+
+    architecture_json = config.architecture_json
+    if isinstance(architecture_json, str):
+        import json
+        architecture_json = json.loads(architecture_json)
+
+    # 预先加载所有相关 ModuleDefinition，构建同步 resolver
+    module_types = set()
+    for node in architecture_json.get("nodes", []):
+        data = node.get("data", {})
+        mt = data.get("moduleType") or data.get("moduleName") or node.get("type", "")
+        if mt:
+            module_types.add(mt)
+
+    module_map: Dict[str, Dict[str, Any]] = {}
+    if module_types:
+        stmt = select(ModuleDefinition).where(ModuleDefinition.type.in_(list(module_types)))
+        res = await db.execute(stmt)
+        for mod in res.scalars().all():
+            module_map[mod.type] = {
+                "type": mod.type,
+                "source": mod.source,
+                "is_composite": mod.is_composite,
+                "schema_json": mod.schema_json,
+                "params_schema": mod.schema_json.get("params_schema") if isinstance(mod.schema_json, dict) else None,
+            }
+
+    def sync_resolver(module_type: str) -> Optional[Dict[str, Any]]:
+        return module_map.get(module_type)
+
+    # 生成 YAML
+    try:
+        yaml_str = architecture_to_yaml(architecture_json, resolver=sync_resolver)
+    except YamlGeneratorError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        )
+
+    # 触发 custom composite 代码生成
+    extra_modules_dir = Path(__file__).resolve().parent.parent.parent / "ml" / "runtime" / "extra_modules"
+    codegen_results = collect_custom_modules(
+        architecture_json,
+        db_resolver=sync_resolver,
+        output_dir=extra_modules_dir,
+    )
+
+    return APIResponse.success_response(
+        data={
+            "yaml": yaml_str,
+            "codegen_results": codegen_results,
         }
     )
