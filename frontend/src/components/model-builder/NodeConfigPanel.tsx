@@ -20,8 +20,16 @@ import {
 } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/utils/cn';
 import { useToast } from '@/hooks/use-toast';
+import { useModelBuilderStore } from '@/stores/modelBuilderStore';
 import type { RFNode, ModuleDefinitionDetail, ParamSchema } from '@/types/mlModule';
 
 interface NodeConfigPanelProps {
@@ -138,6 +146,9 @@ export function NodeConfigPanel({
   const [localParams, setLocalParams] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
+  const mode = useModelBuilderStore((s) => s.mode);
+  const updateNodeRepeats = useModelBuilderStore((s) => s.updateNodeRepeats);
+  const updateNodeSection = useModelBuilderStore((s) => s.updateNodeSection);
 
   // 节点或模块详情变化时，合并默认值 + 当前值
   useEffect(() => {
@@ -396,6 +407,44 @@ export function NodeConfigPanel({
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
+          {/* Architecture 模式专用：repeats & section */}
+          {mode === 'architecture' && (
+            <>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">重复次数（repeats）</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={Number(node.data.repeats ?? 1)}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (!isNaN(val) && val >= 1) {
+                      updateNodeRepeats(node.id, val);
+                    }
+                  }}
+                />
+              </div>
+              <Separator className="mt-2" />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">分区（section）</Label>
+                <Select
+                  value={String(node.data.section ?? 'backbone')}
+                  onValueChange={(v) => updateNodeSection(node.id, v as 'backbone' | 'head')}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择分区" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="backbone">骨干网络（backbone）</SelectItem>
+                    <SelectItem value="head">检测头（head）</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Separator className="mt-2" />
+            </>
+          )}
+
           {paramsSchema.length > 0 ? (
             paramsSchema.map((param) => (
               <div key={param.name}>

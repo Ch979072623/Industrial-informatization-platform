@@ -124,6 +124,7 @@ function ModelCanvasInner({
   const canUndo = useModelBuilderStore((s) => s.canUndo);
   const canRedo = useModelBuilderStore((s) => s.canRedo);
   const setUpdateNodeInternalsRef = useModelBuilderStore((s) => s.setUpdateNodeInternalsRef);
+  const mode = useModelBuilderStore((s) => s.mode);
 
   const updateNodeInternals = useUpdateNodeInternals();
 
@@ -222,6 +223,9 @@ function ModelCanvasInner({
             inputPortsDynamic: module.input_ports_dynamic === true,
             icon: module.is_composite ? 'Network' : 'Layers',
             isComposite: module.is_composite,
+            ...(mode === 'architecture'
+              ? { section: 'backbone' as const, repeats: 1 }
+              : {}),
           },
         };
 

@@ -60,6 +60,11 @@ export interface ModelBuilderState {
   /** React Flow updateNodeInternals 函数引用（由 ModelCanvas 注入，不持久化） */
   updateNodeInternalsRef: ((nodeId: string) => void) | null;
   setUpdateNodeInternalsRef: (ref: ((nodeId: string) => void) | null) => void;
+
+  /** Architecture 模式：更新节点 repeats */
+  updateNodeRepeats: (nodeId: string, repeats: number) => void;
+  /** Architecture 模式：更新节点 section */
+  updateNodeSection: (nodeId: string, section: 'backbone' | 'head') => void;
 }
 
 const MAX_HISTORY = 20;
@@ -269,6 +274,24 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
             ),
           };
         }),
+
+      updateNodeRepeats: (nodeId, repeats) =>
+        set((state) => ({
+          nodes: state.nodes.map((n) =>
+            n.id === nodeId
+              ? { ...n, data: { ...n.data, repeats } }
+              : n
+          ),
+        })),
+
+      updateNodeSection: (nodeId, section) =>
+        set((state) => ({
+          nodes: state.nodes.map((n) =>
+            n.id === nodeId
+              ? { ...n, data: { ...n.data, section } }
+              : n
+          ),
+        })),
 
       getOrLoadModuleSchema: async (moduleType) => {
         const state = get();

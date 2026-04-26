@@ -161,6 +161,12 @@ export interface ModelNodeData {
 
   /** 运行时状态：输入端口数是否动态。undefined 视为 false。不持久化。 */
   inputPortsDynamic?: boolean;
+
+  /** 重复次数（Architecture 模式专用） */
+  repeats?: number;
+
+  /** 分区（Architecture 模式专用）：backbone / head */
+  section?: 'backbone' | 'head';
 }
 
 export interface ModelNode {
