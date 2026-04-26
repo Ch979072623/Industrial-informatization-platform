@@ -471,6 +471,14 @@ async def export_config_yaml(
         import json
         architecture_json = json.loads(architecture_json)
 
+    # 向后兼容：旧数据节点可能缺少 section/repeats
+    for node in architecture_json.get("nodes", []):
+        data = node.get("data", {})
+        if "section" not in data:
+            data["section"] = "backbone"
+        if "repeats" not in data:
+            data["repeats"] = 1
+
     # 预先加载所有相关 ModuleDefinition，构建同步 resolver
     module_types = set()
     for node in architecture_json.get("nodes", []):
