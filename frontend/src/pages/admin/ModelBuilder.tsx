@@ -32,6 +32,7 @@ import { ModuleLibrary } from '@/components/model-builder/ModuleLibrary';
 import { ModelCanvas } from '@/components/model-builder/ModelCanvas';
 import { NodeConfigPanel } from '@/components/model-builder/NodeConfigPanel';
 import { NewCanvasDialog } from '@/components/model-builder/NewCanvasDialog';
+import { ExportDialog } from '@/components/model-builder/ExportDialog';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { mlModuleApi, modelBuilderApi } from '@/services/api';
 import { useModelBuilderStore } from '@/stores/modelBuilderStore';
@@ -61,6 +62,12 @@ export default function ModelBuilder() {
   const setEdges = useModelBuilderStore((s) => s.setEdges);
   const setMode = useModelBuilderStore((s) => s.setMode);
   const mode = useModelBuilderStore((s) => s.mode);
+  const exportDialogOpen = useModelBuilderStore((s) => s.exportDialogOpen);
+  const exportLoading = useModelBuilderStore((s) => s.exportLoading);
+  const exportResult = useModelBuilderStore((s) => s.exportResult);
+  const exportError = useModelBuilderStore((s) => s.exportError);
+  const setExportDialogOpen = useModelBuilderStore((s) => s.setExportDialogOpen);
+  const exportYaml = useModelBuilderStore((s) => s.exportYaml);
 
   // React Flow instance（用于 fitView）
   const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -408,19 +415,13 @@ export default function ModelBuilder() {
     toast({ title: '新建画布', description: mode === 'module' ? '已切换到模块编辑模式' : '已切换到架构编辑模式' });
   }, [toast]);
 
-  const handleExport = useCallback(() => {
-    const exportData = { nodes, edges, exported_at: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `model-config-${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast({ title: '导出成功', description: '模型配置已导出为 JSON 文件' });
-  }, [nodes, edges, toast]);
+  const handleExport = useCallback(async () => {
+    if (!configId) {
+      toast({ title: '导出失败', description: '请先保存配置后再导出', variant: 'destructive' });
+      return;
+    }
+    await exportYaml(configId);
+  }, [configId, exportYaml, toast]);
 
   const handleCloseConfigPanel = useCallback(() => {
     setSelectedNode(null);
@@ -586,6 +587,16 @@ export default function ModelBuilder() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* 导出对话框 */}
+        <ExportDialog
+          open={exportDialogOpen}
+          onClose={() => setExportDialogOpen(false)}
+          yamlContent={exportResult?.yaml ?? ''}
+          codegenResults={exportResult?.codegenResults ?? []}
+          error={exportError ?? undefined}
+          loading={exportLoading}
+        />
 
         {/* 加载对话框 */}
         <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>

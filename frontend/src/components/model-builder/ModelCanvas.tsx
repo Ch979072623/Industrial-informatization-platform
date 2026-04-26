@@ -545,14 +545,16 @@ function ModelCanvasInner({
             >
               <FolderOpen className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onExport}
-              title="导出"
-            >
-              <Download className="h-4 w-4" />
-            </Button>
+            {mode === 'architecture' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onExport}
+                title="导出 YAML"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            )}
             <div className="w-px h-4 bg-border mx-1" />
             <Button
               variant="ghost"

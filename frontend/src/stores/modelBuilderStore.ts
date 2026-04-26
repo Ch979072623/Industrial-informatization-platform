@@ -13,7 +13,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { applyNodeChanges, applyEdgeChanges, type NodeChange, type EdgeChange, type Viewport } from '@xyflow/react';
-import { mlModuleApi } from '@/services/api';
+import { mlModuleApi, modelBuilderApi } from '@/services/api';
 import type { RFNode, RFEdge, ModuleSchemaDetail, SubNode, SubEdge, CanvasMode } from '@/types/mlModule';
 
 export interface ModelBuilderState {
@@ -65,6 +65,14 @@ export interface ModelBuilderState {
   updateNodeRepeats: (nodeId: string, repeats: number) => void;
   /** Architecture 模式：更新节点 section */
   updateNodeSection: (nodeId: string, section: 'backbone' | 'head') => void;
+
+  /** 导出对话框状态 */
+  exportDialogOpen: boolean;
+  exportLoading: boolean;
+  exportResult: { yaml: string; codegenResults: Array<{ type: string; path?: string; error?: string; code?: string }> } | null;
+  exportError: string | null;
+  setExportDialogOpen: (open: boolean) => void;
+  exportYaml: (configId: string) => Promise<void>;
 }
 
 const MAX_HISTORY = 20;
@@ -292,6 +300,35 @@ export const useModelBuilderStore = create<ModelBuilderState>()(
               : n
           ),
         })),
+
+      exportDialogOpen: false,
+      exportLoading: false,
+      exportResult: null,
+      exportError: null,
+      setExportDialogOpen: (open) => set({ exportDialogOpen: open }),
+      exportYaml: async (configId) => {
+        set({ exportLoading: true, exportError: null, exportResult: null });
+        try {
+          const response = await modelBuilderApi.exportYaml(configId);
+          const data = response.data.data;
+          if (data) {
+            set({
+              exportResult: {
+                yaml: data.yaml,
+                codegenResults: data.codegen_results || [],
+              },
+              exportDialogOpen: true,
+            });
+          } else {
+            set({ exportError: '导出失败：未返回数据' });
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : '导出失败';
+          set({ exportError: message });
+        } finally {
+          set({ exportLoading: false });
+        }
+      },
 
       getOrLoadModuleSchema: async (moduleType) => {
         const state = get();
