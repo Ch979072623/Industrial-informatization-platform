@@ -126,8 +126,8 @@ def _extract_args(node_data: Dict[str, Any], params_schema: Optional[List[Dict[s
                 args.append(params[name])
         return args
 
-    # 无 schema 时按 key 排序
-    return [v for _, v in sorted(params.items())]
+    # 无 schema 时保留原始插入顺序
+    return list(params.values())
 
 
 def architecture_to_yaml(

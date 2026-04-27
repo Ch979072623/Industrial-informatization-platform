@@ -25,6 +25,7 @@ from app.ml.runtime.yaml_generator import (
     _topological_sort,
     _derive_from,
     _build_incoming,
+    _extract_args,
 )
 
 
@@ -335,6 +336,23 @@ class TestArchitectureToYaml:
 
         yaml_str = architecture_to_yaml(arch, resolver=resolver)
         assert "[64, 3]" in yaml_str
+
+
+class TestExtractArgs:
+    """_extract_args 子测试"""
+
+    def test_extract_args_preserves_order_without_schema(self):
+        """无 schema 时保留 params dict 原始插入顺序，不按字母序重排"""
+        node_data = {"params": {"z": 1, "a": 2}}
+        result = _extract_args(node_data, params_schema=None)
+        assert result == [1, 2], f"Expected [1, 2] preserving insertion order, got {result}"
+
+    def test_extract_args_follows_schema_when_present(self):
+        """有 schema 时按 schema 顺序提取"""
+        node_data = {"params": {"z": 1, "a": 2}}
+        schema = [{"name": "a"}, {"name": "z"}]
+        result = _extract_args(node_data, params_schema=schema)
+        assert result == [2, 1]
 
 
 class TestCollectCustomModules:
