@@ -88,6 +88,7 @@ async def sample_job(
         hyperparams={"epochs": 100, "batch": 16, "imgsz": 640},
         status="pending",
         progress=0.0,
+        created_by="admin-123",
     )
     db_session.add(job)
     await db_session.commit()
@@ -183,6 +184,34 @@ class TestCreateTrainingJob:
         assert response.status_code == 404
     
     @pytest.mark.asyncio
+    async def test_create_training_job_includes_created_by(
+        self,
+        admin_client: AsyncClient,
+        db_session: AsyncSession,
+        sample_config: ModelBuilderConfig,
+        sample_dataset: Dataset,
+        sample_line: ProductionLine,
+    ) -> None:
+        """创建后 ORM 中 created_by 等于当前用户 id"""
+        payload = {
+            "model_builder_config_id": sample_config.id,
+            "dataset_id": sample_dataset.id,
+            "production_line_id": sample_line.id,
+            "hyperparams": {"epochs": 10},
+        }
+        
+        with patch("app.services.training_service.train_model.delay") as mock_delay:
+            mock_task = MagicMock()
+            mock_task.id = "celery-task-created-by"
+            mock_delay.return_value = mock_task
+            
+            response = await admin_client.post("/api/v1/training/jobs", json=payload)
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["data"]["created_by"] == "admin-123"
+    
+    @pytest.mark.asyncio
     async def test_create_training_job_unauthorized_config(
         self,
         user_client: AsyncClient,
@@ -247,6 +276,38 @@ class TestListTrainingJobs:
         items2 = data2["data"]["items"]
         assert len(items2) == 0
 
+    @pytest.mark.asyncio
+    async def test_list_training_jobs_filtered_by_user(
+        self,
+        admin_client: AsyncClient,
+        db_session: AsyncSession,
+        sample_job: TrainingJob,
+        sample_config: ModelBuilderConfig,
+        sample_dataset: Dataset,
+        sample_line: ProductionLine,
+    ) -> None:
+        """用户 A 列表只能看到自己的 job,即使数据库里有用户 B 的 job"""
+        # 创建属于 user-123 的 job
+        other_job = TrainingJob(
+            model_builder_config_id=sample_config.id,
+            dataset_id=sample_dataset.id,
+            production_line_id=sample_line.id,
+            hyperparams={},
+            status="pending",
+            progress=0.0,
+            created_by="user-123",
+        )
+        db_session.add(other_job)
+        await db_session.commit()
+        
+        response = await admin_client.get("/api/v1/training/jobs")
+        assert response.status_code == 200
+        data = response.json()
+        items = data["data"]["items"]
+        # 只能看到 admin-123 的 sample_job
+        assert len(items) == 1
+        assert items[0]["id"] == sample_job.id
+
 
 # ==================== 详情查询测试 ====================
 
@@ -282,14 +343,9 @@ class TestGetTrainingJob:
         user_client: AsyncClient,
         sample_job: TrainingJob,
     ) -> None:
-        """
-        查别人的任务
-        注: TrainingJob ORM 目前缺少 created_by 字段,无法做用户隔离,
-            当前行为是返回 200。需在后续轮次补充 created_by 后改为 404。
-        """
+        """用户 A 的 job,用户 B 查看应返回 403 (对齐 augmentation 错误码)"""
         response = await user_client.get(f"/api/v1/training/jobs/{sample_job.id}")
-        # 由于缺少 created_by,当前无法做权限隔离,返回 200
-        assert response.status_code == 200
+        assert response.status_code == 403
 
 
 # ==================== 进度查询测试 ====================
@@ -316,6 +372,16 @@ class TestGetTrainingJobProgress:
         assert "total_epochs" in progress
         assert "current_operation" in progress
         assert "error_message" in progress
+
+    @pytest.mark.asyncio
+    async def test_get_training_job_progress_other_user(
+        self,
+        user_client: AsyncClient,
+        sample_job: TrainingJob,
+    ) -> None:
+        """用户 A 的 job,用户 B 查 progress 返回 403"""
+        response = await user_client.get(f"/api/v1/training/jobs/{sample_job.id}/progress")
+        assert response.status_code == 403
 
 
 # ==================== 任务控制测试 ====================
@@ -348,6 +414,20 @@ class TestControlTrainingJob:
         assert data["data"]["status"] == "cancelled"
         assert data["data"]["action"] == "cancel"
     
+    @pytest.mark.asyncio
+    async def test_control_training_job_other_user(
+        self,
+        user_client: AsyncClient,
+        sample_job: TrainingJob,
+    ) -> None:
+        """用户 A 的 job,用户 B 调 control 返回 403"""
+        payload = {"action": "cancel"}
+        response = await user_client.post(
+            f"/api/v1/training/jobs/{sample_job.id}/control",
+            json=payload,
+        )
+        assert response.status_code == 403
+
     @pytest.mark.asyncio
     async def test_control_training_job_invalid_action(
         self,

@@ -38,6 +38,7 @@ async def test_training_job_create_with_error_message(db_session: AsyncSession) 
         production_line_id=line.id,
         hyperparams={},
         error_message="CUDA out of memory",
+        created_by=user.id,
     )
     db_session.add(job)
     await db_session.commit()
@@ -71,6 +72,7 @@ async def test_training_job_error_message_default_null(db_session: AsyncSession)
         dataset_id=dataset.id,
         production_line_id=line.id,
         hyperparams={},
+        created_by=user.id,
     )
     db_session.add(job)
     await db_session.commit()
@@ -104,12 +106,14 @@ async def test_model_builder_config_reverse_relationship(db_session: AsyncSessio
         dataset_id=dataset.id,
         production_line_id=line.id,
         hyperparams={},
+        created_by=user.id,
     )
     job2 = TrainingJob(
         model_builder_config_id=config.id,
         dataset_id=dataset.id,
         production_line_id=line.id,
         hyperparams={},
+        created_by=user.id,
     )
     db_session.add_all([job1, job2])
     await db_session.commit()
@@ -147,6 +151,7 @@ async def test_model_builder_config_cascade_delete_training_jobs(db_session: Asy
         dataset_id=dataset.id,
         production_line_id=line.id,
         hyperparams={},
+        created_by=user.id,
     )
     db_session.add(job)
     await db_session.commit()
