@@ -74,7 +74,7 @@ async def list_training_jobs(
         page=page,
         page_size=page_size,
     )
-    jobs, total = await service.list_jobs(query)
+    jobs, total = await service.list_jobs(query, current_user.user_id)
     
     return APIResponse.success_response(
         data=PaginatedResponse.create(
@@ -93,7 +93,7 @@ async def get_training_job(
     service: TrainingService = Depends(get_training_service),
 ) -> APIResponse[TrainingJobResponse]:
     """获取训练任务详情"""
-    job = await service.get_job(job_id)
+    job = await service.get_job(job_id, current_user.user_id)
     return APIResponse.success_response(
         data=TrainingJobResponse.model_validate(job)
     )
@@ -106,7 +106,7 @@ async def get_training_job_progress(
     service: TrainingService = Depends(get_training_service),
 ) -> APIResponse[TrainingJobProgressResponse]:
     """获取训练任务进度"""
-    progress = await service.get_progress(job_id)
+    progress = await service.get_progress(job_id, current_user.user_id)
     return APIResponse.success_response(data=progress)
 
 
@@ -122,5 +122,5 @@ async def control_training_job(
     
     支持 pause（暂停）、resume（恢复）、cancel（取消）
     """
-    result = await service.control_job(job_id, request)
+    result = await service.control_job(job_id, request, current_user.user_id)
     return APIResponse.success_response(data=result)

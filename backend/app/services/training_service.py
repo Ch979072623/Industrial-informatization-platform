@@ -111,6 +111,7 @@ class TrainingService:
             hyperparams=hyperparams,
             status="pending",
             progress=0.0,
+            created_by=current_user_id,
         )
         self.db.add(job)
         await self.db.flush()
@@ -135,13 +136,14 @@ class TrainingService:
         
         return job
     
-    async def list_jobs(self, query: TrainingJobListQuery) -> Tuple[List[TrainingJob], int]:
+    async def list_jobs(self, query: TrainingJobListQuery, current_user_id: str) -> Tuple[List[TrainingJob], int]:
         """
         列出训练任务
         
         支持按状态、模型构建器配置ID、数据集ID过滤和分页
+        只返回当前用户创建的任务
         """
-        conditions = []
+        conditions = [TrainingJob.created_by == current_user_id]
         
         if query.status:
             conditions.append(TrainingJob.status == query.status)
@@ -151,24 +153,33 @@ class TrainingService:
             conditions.append(TrainingJob.dataset_id == query.dataset_id)
         
         # 获取总数
-        count_query = select(func.count()).select_from(TrainingJob)
-        if conditions:
-            count_query = count_query.where(and_(*conditions))
+        count_query = select(func.count()).select_from(TrainingJob).where(and_(*conditions))
         count_result = await self.db.execute(count_query)
         total = count_result.scalar() or 0
         
         # 获取分页数据
-        stmt = select(TrainingJob).order_by(desc(TrainingJob.created_at))
-        if conditions:
-            stmt = stmt.where(and_(*conditions))
-        stmt = stmt.offset((query.page - 1) * query.page_size).limit(query.page_size)
+        stmt = (
+            select(TrainingJob)
+            .where(and_(*conditions))
+            .order_by(desc(TrainingJob.created_at))
+            .offset((query.page - 1) * query.page_size)
+            .limit(query.page_size)
+        )
         
         result = await self.db.execute(stmt)
         jobs = result.scalars().all()
         
         return list(jobs), total
     
-    async def get_job(self, job_id: str) -> TrainingJob:
+    def _check_job_ownership(self, job: TrainingJob, current_user_id: str) -> None:
+        """检查任务所有权,无权限则抛 403"""
+        if job.created_by != current_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权访问此训练任务"
+            )
+    
+    async def get_job(self, job_id: str, current_user_id: str) -> TrainingJob:
         """获取训练任务详情"""
         result = await self.db.execute(
             select(TrainingJob).where(TrainingJob.id == job_id)
@@ -179,11 +190,12 @@ class TrainingService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="训练任务不存在"
             )
+        self._check_job_ownership(job, current_user_id)
         return job
     
-    async def get_progress(self, job_id: str) -> TrainingJobProgressResponse:
+    async def get_progress(self, job_id: str, current_user_id: str) -> TrainingJobProgressResponse:
         """获取训练任务进度"""
-        job = await self.get_job(job_id)
+        job = await self.get_job(job_id, current_user_id)
         
         processed_epochs = 0
         total_epochs = 150
@@ -219,14 +231,15 @@ class TrainingService:
     async def control_job(
         self,
         job_id: str,
-        request: TrainingJobControlRequest
+        request: TrainingJobControlRequest,
+        current_user_id: str
     ) -> TrainingJobControlResponse:
         """
         控制训练任务
         
         支持 pause、resume、cancel (对齐 augmentation)
         """
-        job = await self.get_job(job_id)
+        job = await self.get_job(job_id, current_user_id)
         action = request.action
         
         if action == "cancel":
