@@ -3,7 +3,7 @@
 """
 from datetime import datetime
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class TrainingMetrics(BaseModel):
@@ -18,6 +18,7 @@ class TrainingMetrics(BaseModel):
 
 class TrainingJobBase(BaseModel):
     """训练任务基础 Schema"""
+    model_config = ConfigDict(protected_namespaces=())
     model_builder_config_id: str = Field(description="模型构建器配置ID")
     dataset_id: str = Field(description="数据集ID")
     hyperparams: Dict[str, Any] = Field(
@@ -42,6 +43,7 @@ class TrainingJobResponse(TrainingJobBase):
     status: str = Field(description="状态")
     progress: float = Field(description="进度 0-100")
     metrics: Optional[Dict[str, Any]] = Field(default=None, description="训练指标")
+    error_message: Optional[str] = Field(default=None, description="错误信息")
     best_weights_path: Optional[str] = Field(default=None, description="最佳权重路径")
     log_path: Optional[str] = Field(default=None, description="日志路径")
     celery_task_id: Optional[str] = Field(default=None, description="Celery任务ID")
@@ -51,8 +53,7 @@ class TrainingJobResponse(TrainingJobBase):
     created_at: datetime = Field(description="创建时间")
     updated_at: datetime = Field(description="更新时间")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
 
 class TrainedModelResponse(BaseModel):
