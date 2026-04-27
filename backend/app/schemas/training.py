@@ -18,7 +18,7 @@ class TrainingMetrics(BaseModel):
 
 class TrainingJobBase(BaseModel):
     """训练任务基础 Schema"""
-    model_config_id: str = Field(description="模型配置ID")
+    model_builder_config_id: str = Field(description="模型构建器配置ID")
     dataset_id: str = Field(description="数据集ID")
     hyperparams: Dict[str, Any] = Field(
         default_factory=lambda: {
