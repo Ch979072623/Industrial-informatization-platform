@@ -728,3 +728,78 @@ B-4 测试通过 `inspect.signature` 过滤参数绕过了此问题。
 **触发时机**：Phase 5 主体开工前（P5-Gate 预热阶段完成）
 
 **预估成本**：已落地（约 30 分钟）
+
+## [P1] augmentation 服务边界框翻转 bug
+
+**背景**：
+P5-Gate（2026-04-27）修复 `test_augmentation.py` import 后，该测试文件从"完全无法被 pytest 收集"变为"25 个测试全部收集"，其中暴露 5 个预先存在的 augmentation 服务逻辑失败。
+
+**现状**：
+`pytest backend/tests/test_augmentation.py` 5 failed，典型错误信息：`albumentations 边界框翻转后 x_max <= x_min for bbox`。
+
+**初步根因推测**（待新会话侦察确认）：
+- albumentations 库执行水平翻转 / 垂直翻转时，bbox 坐标重新计算后出现 `x_max <= x_min`
+- 可能原因：输入 bbox 已是退化情况（零宽度 / 零高度）；或 augmentation pipeline 的 `min_visibility` / `min_area` 配置过严；或 albumentations 版本与项目调用方式不兼容
+
+**影响**：
+现役用户使用 augmentation 模块的水平 / 垂直翻转功能时实际任务可能失败。不阻塞 Phase 5 训练主流程，但用户从 augmentation 产生的 target_dataset 不能用于训练。
+
+**触发修复时机**：
+Phase 5 主体完成前后，用独立 Claude 会话专门处理。当前 Phase 5 策划会话不揽 augmentation 领域工作。
+
+**修复入口建议**：
+- 主代码：`backend/app/services/augmentation/` 下的水平 / 垂直翻转操作实现
+- 测试：`backend/tests/test_augmentation.py`
+- 相关 schema：`backend/app/schemas/augmentation.py`（pipeline_config 结构）
+- 相关 ORM：`backend/app/models/augmentation.py`（AugmentationJob.pipeline_config 字段）
+
+**预估成本**：1-3 小时，主要在定位 albumentations 配置 vs 真实 bbox 数据的兼容性。
+
+**修复后基线**：
+test_augmentation.py 范围内 `5 failed` 应清零，全套测试基线变为 `165 passed, 0 failed`。
+
+---
+
+## [P2 · Phase 5 落地依赖] 删除 ModelBuilderConfig 时前端弹警告
+
+**背景**：
+P5-S1（2026-04-27）在 `ModelBuilderConfig.training_jobs` 设 `cascade="all, delete-orphan"`。删除 ModelBuilderConfig 时级联删除关联 TrainingJob 记录（含 metrics / weights_path / log_path 等训练产出）。后端 `ondelete="CASCADE"` + ORM cascade 双重保证。
+
+**现状**：
+ORM 层级联删除已落地，但前端模型构建器删除按钮当前**直接发删除请求**，没有提示用户级联删除的影响。
+
+**修法**：
+前端在 ModelBuilderConfig 删除操作触发前（列表页 / 详情页删除按钮），弹 confirm 对话框：
+
+> 删除此画布配置将一并删除关联的 N 个训练任务及其训练指标、模型权重。此操作不可恢复，是否继续？
+
+用户明确点击"确认"后才发删除请求。N 来源：后端 GET `/api/v1/model-configs/{id}` 时一并返回 `training_jobs_count`（或类似字段），前端读取该字段。如果列表页直接删除，确认列表 API 是否也包含该字段。
+
+**文件**：
+- `frontend/src/pages/admin/ModelBuilder*.tsx`（实际位置以现役代码为准）
+- 可能要新增前端共用 confirm 组件（如果删除入口分布多处）
+- `backend/app/api/v1/model_builder.py`（GET 端点加 training_jobs_count 字段）
+
+**触发修复时机**：
+P5-S5（前端 TrainingPage）起草时一并落地，但**必须在前端开放删除按钮给真实用户前**完成，否则有误删风险。
+
+**预估成本**：1-2 小时（后端加字段 + 前端加 confirm 对话框）。
+
+---
+
+## [P3] detection.py / module_definition.py 的 Pydantic V2 警告
+
+**背景**：
+P5-S1（2026-04-27）在 training schema 加了 `ConfigDict(protected_namespaces=())` 消除了 `model_builder_config_id` 触发的 Pydantic V2 protected namespace 警告。但 P5-S1 自验输出显示，项目内还有 2 处同类警告未处理。
+
+**现状**：
+- `backend/app/models/detection.py` — `model_id` 字段触发 `Field "model_id" has conflict with protected namespace "model_"`
+- `backend/app/models/module_definition.py` — `schema_json` 字段触发 `schema_json shadows an attribute`
+
+**修法**：
+对涉及的 Pydantic 类（应该是 schema 而非 ORM，看 P5-S1 报告未明确）加 `model_config = ConfigDict(protected_namespaces=())`，或重命名字段。
+
+**触发修复时机**：
+Phase 5 主体完成前后，或下次动 detection / module_definition 模块时顺手修。不阻塞 Phase 5。
+
+**预估成本**：15-30 分钟（两个文件各加一行 ConfigDict 配置）。
