@@ -2,7 +2,7 @@
 训练任务相关 Schema
 """
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Literal
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -23,10 +23,9 @@ class TrainingJobBase(BaseModel):
     dataset_id: str = Field(description="数据集ID")
     hyperparams: Dict[str, Any] = Field(
         default_factory=lambda: {
-            "epochs": 100,
-            "batch_size": 16,
-            "learning_rate": 0.001,
-            "device": "cuda"
+            "epochs": 150,
+            "batch": 32,
+            "imgsz": 640,
         },
         description="超参数"
     )
@@ -74,3 +73,39 @@ class TrainedModelResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class TrainingJobListQuery(BaseModel):
+    """训练任务列表查询 Schema"""
+    model_config = ConfigDict(protected_namespaces=())
+    status: Optional[str] = Field(default=None, pattern="^(pending|running|paused|completed|failed|cancelled)$")
+    model_builder_config_id: Optional[str] = Field(default=None, description="模型构建器配置ID")
+    dataset_id: Optional[str] = Field(default=None, description="数据集ID")
+    page: int = Field(default=1, ge=1, description="页码")
+    page_size: int = Field(default=20, ge=1, le=100, description="每页数量")
+
+
+class TrainingJobControlRequest(BaseModel):
+    """训练任务控制请求 Schema"""
+    action: Literal["pause", "resume", "cancel"] = Field(..., description="控制动作")
+
+
+class TrainingJobControlResponse(BaseModel):
+    """训练任务控制响应 Schema"""
+    job_id: str = Field(description="任务ID")
+    action: str = Field(description="控制动作")
+    status: str = Field(description="控制后的最终状态")
+    message: str = Field(description="人类可读说明")
+
+
+class TrainingJobProgressResponse(BaseModel):
+    """训练任务进度响应 Schema"""
+    model_config = ConfigDict(protected_namespaces=())
+    job_id: str = Field(description="任务ID")
+    status: str = Field(description="状态")
+    progress: float = Field(description="进度百分比 0-100")
+    processed_epochs: int = Field(description="已处理轮次")
+    total_epochs: int = Field(description="总轮次")
+    current_operation: Optional[str] = Field(default=None, description="当前阶段描述")
+    estimated_time_remaining: Optional[int] = Field(default=None, description="预计剩余时间（秒）")
+    error_message: Optional[str] = Field(default=None, description="错误信息")
