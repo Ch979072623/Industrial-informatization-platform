@@ -49,6 +49,7 @@ class TrainingJobResponse(TrainingJobBase):
     started_at: Optional[datetime] = Field(default=None, description="开始时间")
     completed_at: Optional[datetime] = Field(default=None, description="完成时间")
     production_line_id: str = Field(description="所属产线ID")
+    created_by: str = Field(description="创建者ID")
     created_at: datetime = Field(description="创建时间")
     updated_at: datetime = Field(description="更新时间")
     

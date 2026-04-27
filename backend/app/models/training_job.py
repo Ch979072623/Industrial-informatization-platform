@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.production_line import ProductionLine
     from app.models.dataset import Dataset
     from app.models.ml_module import ModelBuilderConfig
+    from app.models.user import User
 
 
 class TrainingJob(BaseModel):
@@ -119,6 +120,14 @@ class TrainingJob(BaseModel):
         comment="所属产线ID"
     )
     
+    # 创建者
+    created_by: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="创建者ID"
+    )
+    
     # 关系
     model_builder_config: Mapped["ModelBuilderConfig"] = relationship(
         "ModelBuilderConfig", back_populates="training_jobs"
@@ -131,6 +140,7 @@ class TrainingJob(BaseModel):
         "ProductionLine",
         back_populates="training_jobs"
     )
+    creator: Mapped["User"] = relationship("User")
     trained_models: Mapped[List["TrainedModel"]] = relationship(
         "TrainedModel",
         back_populates="training_job"
