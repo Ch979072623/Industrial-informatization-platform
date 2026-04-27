@@ -48,7 +48,7 @@ app.db
 
 # Uploads and models
 uploads/
-models/
+/models/
 *.pth
 *.pt
 *.onnx
