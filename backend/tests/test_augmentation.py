@@ -27,8 +27,8 @@ from app.services.augmentation_service import (
     get_augmentation_service,
 )
 from app.schemas.augmentation import (
-    CreateJobRequest,
-    PreviewRequest,
+    AugmentationJobCreate,
+    AugmentationPreviewRequest,
 )
 
 
@@ -383,7 +383,7 @@ class TestSchemaValidation:
     def test_create_job_request_validation(self):
         """测试创建任务请求验证"""
         # 有效请求
-        valid_request = CreateJobRequest(
+        valid_request = AugmentationJobCreate(
             name="测试任务",
             source_dataset_id="test-dataset-id",
             pipeline_config=[],
@@ -393,7 +393,7 @@ class TestSchemaValidation:
 
     def test_preview_request_validation(self):
         """测试预览请求验证"""
-        request = PreviewRequest(
+        request = AugmentationPreviewRequest(
             source_dataset_id="test-dataset-id",
             pipeline_config=[],
         )
