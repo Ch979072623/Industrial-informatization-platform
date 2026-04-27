@@ -63,6 +63,7 @@ docs/private/
 !docs/qa-scripts.md
 # !docs/phase-4b-cleanup-summary.md
 !docs/model-builder-architecture.md
+!docs/coding-standards.md
 # 论文原版源码（私有，不上传 GitHub）
 backend/app/ml/paper_reference/**
 # 但保留 README 让未来看项目结构的人知道此处用途
