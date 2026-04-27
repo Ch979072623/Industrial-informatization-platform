@@ -694,3 +694,37 @@ B-4 测试通过 `inspect.signature` 过滤参数绕过了此问题。
 **触发时机**：同 BL-codegen-01，两条一起修。
 
 **预估成本**：1-2 小时（和上一条合并处理）
+
+## [P3 · 触发时机：用户首次反馈配置列表混乱时] 保存配置允许重名导致加载列表出现重复条目
+
+**背景**：Architecture 画布保存时不校验名称唯一性，用户多次保存同名配置会在加载列表里产生多条重复记录。
+
+**修法**：保存前查询同名配置是否已存在，已存在则提示用户"已有同名配置，是否覆盖？"，确认后走更新接口而非新建。
+
+**触发时机**：用户首次反馈配置列表混乱时，或 Phase 5 训练页面需要选择配置时（重名会造成选择混乱）。
+
+**预估成本**：1-2 小时
+
+---
+
+## [已完成 · 2026-04-27] P5-Hygiene-A: .gitignore 修正 + ORM 文件补录 git
+
+**背景**：
+根目录 `.gitignore` 的 `models/` 规则（无开头 `/`）为 gitignore "任意层级匹配"语法，误将 `backend/app/models/` 整目录吃掉，导致该目录下所有核心 ORM 文件从未被 git 追踪。P5-Gate 阶段暴露了此问题。
+
+**已完成**：
+1. `.gitignore` 修正：`models/` → `/models/`（只匹配仓库根目录的 `models/`）
+2. 补录 `backend/app/models/` 下全部 11 个未追踪 ORM 文件入 git
+3. 阶段零侦察确认 `backend/app/models/` 之外无其他 .gitignore 误匹配问题
+
+**侦察方法**：
+- `git status --ignored --short` + `git ls-files --others --ignored --exclude-standard` 全项目扫描
+- 被忽略文件均为预期范围：`__pycache__/`、`.pytest_cache/`、`app.db`、`backend/app/ml/paper_reference/`、`backend/app/ml/runtime/extra_modules/`（运行时生成）、`logs/` 等
+
+**遗留备注**：
+- `lib/`、`env/`、`uploads/`、`tmp/`、`temp/` 等规则仍不带 `/`，但阶段零侦察确认项目内部无同名源代码目录，当前无实际误匹配
+- 如未来在项目内部创建同名包目录，需同步将这些规则改为 `/lib/`、`/env/` 等
+
+**触发时机**：Phase 5 主体开工前（P5-Gate 预热阶段完成）
+
+**预估成本**：已落地（约 30 分钟）
