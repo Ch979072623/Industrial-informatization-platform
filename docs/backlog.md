@@ -729,77 +729,206 @@ B-4 测试通过 `inspect.signature` 过滤参数绕过了此问题。
 
 **预估成本**：已落地（约 30 分钟）
 
+
+
+## [P0] codegen `_get_init_params` 重写 + B-4 等价性测试重写
+
+**背景**:
+P5-S3-Recon-2(2026-04-27)实测发现 B-2 codegen 生成的论文模块类在官方 pip ultralytics 下兼容性差。详细诊断见 `backend/scripts/recon_codegen_signature_report.md`。
+
+**三大根因**:
+1. codegen `_get_init_params` 按 `sub_nodes` 拓扑序排参数,与 `architecture_to_yaml` 使用的 `params_schema` 顺序不一致 → 参数顺序错位的**静默 bug**(模型构造成功但参数语义全错)
+2. codegen 不生成 `params_schema` 中未在 `sub_nodes` 使用的参数 → CSP_PMSFA 缺 `n/shortcut/g` 触发 TypeError
+3. **B-4 用 `cls(**filtered)` 关键字参数测试,完全掩盖根因 1+2** — 元问题:测试机制设计错
+
+**现状**:
+4 个论文代表类(PMSFA/FocusFeature/CSP_PMSFA/Detect_SASD)中只有 PMSFA 1 个能跑通官方 ultralytics 加载。
+
+**修法**:
+- **任务 1**:修 `backend/app/ml/runtime/codegen.py` 的 `_get_init_params`:
+  - 按 `params_schema` 顺序排参数(不是 sub_nodes 拓扑序)
+  - 包含 schema 全部声明的参数(即使未在 sub_nodes 引用)
+  - 生成参数默认值
+- **任务 2**:重写 B-4 等价性测试:
+  - 把 `cls(**filtered)` 改为模拟 ultralytics parse_model 的 `cls(*args)` 位置参数调用
+  - 测试改写后,论文 7 个类的等价性测试可能有部分会失败(之前掩盖的 bug 暴露),需逐个排查
+
+**触发修复时机**:**立即**。Phase 5 P5-S3 主体训练实现的前置阻塞任务,必须先修。
+
+**预估成本**:
+- 任务 1:1-2 天
+- 任务 2:0.5-1 天
+
+**文件**:
+- `backend/app/ml/runtime/codegen.py`
+- `backend/tests/` 下 codegen / equivalence 相关测试文件
+- 可能需要更新论文 7 个类的 `module.json` schema(确认 params_schema 字段顺序正确)
+
+**关联**:
+- [P0] 多输入 `f` 列表问题 — 通常一并处理
+- 详细诊断:`backend/scripts/recon_codegen_signature_report.md`
+
+---
+
+## [P0] 多输入 `f` 列表问题(FocusFeature / Detect_SASD)
+
+**背景**:
+P5-S3-Recon-2 发现 `FocusFeature` 和 `Detect_SASD` 在 yaml 中的 `from` 字段是列表(如 `[[10, 6, 4], 1, FocusFeature, []]`),官方 pip ultralytics `parse_model` 不支持这种多输入格式 — **无论 codegen 是否修复都需要额外处理**。
+
+**现状**:
+- 多输入模块在魔改版 ultralytics 下能跑(因为有 `elif m is FocusFeature:` 等硬编码分支)
+- 切到官方版后,parse_model 直接拒绝 list 形式的 `from`
+
+**两条候选路径(需用户拍板)**:
+- **3a:monkey-patch parse_model**
+  - 项目运行时给官方 ultralytics 的 `parse_model` 加 multi-input 处理逻辑
+  - 违反 A1 决策初衷"用官方版,不动 ultralytics 内部"
+  - 引入对 ultralytics 内部 API 的运行时绑定 → 版本升级踩坑可能性大
+- **3b:改 yaml 结构**
+  - 把多输入模块拆成多个单输入 + Concat
+  - 需重新审视论文模型 yaml 表达
+  - 可能影响 codegen 生成逻辑(当前 codegen 假设单输入或多输入随意)
+
+**修法**:用户先拍板 3a vs 3b,再起施工提示词。
+
+**触发修复时机**:**立即**(在 codegen 任务 1+2 之后,P5-S3 主体之前)。
+
+**预估成本**:2-4 天(取决于路径选择和涉及模块数量)
+
+**文件**:
+- 3a:`backend/app/ml/runtime/` 下新增 patch 文件 + 启动时挂载
+- 3b:`backend/app/ml/runtime/yaml_generator.py` + 论文模型 yaml 表达重新设计
+
+**关联**:
+- [P0] codegen `_get_init_params` 重写 — 通常一并处理
+
+---
+
 ## [P1] augmentation 服务边界框翻转 bug
 
-**背景**：
-P5-Gate（2026-04-27）修复 `test_augmentation.py` import 后，该测试文件从"完全无法被 pytest 收集"变为"25 个测试全部收集"，其中暴露 5 个预先存在的 augmentation 服务逻辑失败。
+**背景**:
+P5-Gate(2026-04-27)修复 `test_augmentation.py` import 后,该测试文件从"完全无法被 pytest 收集"变为"25 个测试全部收集",其中暴露 5 个预先存在的 augmentation 服务逻辑失败。
 
-**现状**：
-`pytest backend/tests/test_augmentation.py` 5 failed，典型错误信息：`albumentations 边界框翻转后 x_max <= x_min for bbox`。
+**现状**:
+`pytest backend/tests/test_augmentation.py` 5 failed,典型错误信息:`albumentations 边界框翻转后 x_max <= x_min for bbox`。
 
-**初步根因推测**（待新会话侦察确认）：
-- albumentations 库执行水平翻转 / 垂直翻转时，bbox 坐标重新计算后出现 `x_max <= x_min`
-- 可能原因：输入 bbox 已是退化情况（零宽度 / 零高度）；或 augmentation pipeline 的 `min_visibility` / `min_area` 配置过严；或 albumentations 版本与项目调用方式不兼容
+**初步根因推测**(待新会话侦察确认):
+- albumentations 库执行水平翻转 / 垂直翻转时,bbox 坐标重新计算后出现 `x_max <= x_min`
+- 可能原因:输入 bbox 已是退化情况(零宽度 / 零高度);或 augmentation pipeline 的 `min_visibility` / `min_area` 配置过严;或 albumentations 版本与项目调用方式不兼容
 
-**影响**：
-现役用户使用 augmentation 模块的水平 / 垂直翻转功能时实际任务可能失败。不阻塞 Phase 5 训练主流程，但用户从 augmentation 产生的 target_dataset 不能用于训练。
+**影响**:
+现役用户使用 augmentation 模块的水平 / 垂直翻转功能时实际任务可能失败。不阻塞 Phase 5 训练主流程,但用户从 augmentation 产生的 target_dataset 不能用于训练。
 
-**触发修复时机**：
-Phase 5 主体完成前后，用独立 Claude 会话专门处理。当前 Phase 5 策划会话不揽 augmentation 领域工作。
+**触发修复时机**:
+Phase 5 主体完成前后,**用独立 Claude 会话**专门处理。当前 Phase 5 策划会话不揽 augmentation 领域工作。
 
-**修复入口建议**：
-- 主代码：`backend/app/services/augmentation/` 下的水平 / 垂直翻转操作实现
-- 测试：`backend/tests/test_augmentation.py`
-- 相关 schema：`backend/app/schemas/augmentation.py`（pipeline_config 结构）
-- 相关 ORM：`backend/app/models/augmentation.py`（AugmentationJob.pipeline_config 字段）
+**修复入口建议**:
+- 主代码:`backend/app/services/augmentation/` 下的水平 / 垂直翻转操作实现
+- 测试:`backend/tests/test_augmentation.py`
+- 相关 schema:`backend/app/schemas/augmentation.py`(pipeline_config 结构)
+- 相关 ORM:`backend/app/models/augmentation.py`(AugmentationJob.pipeline_config 字段)
 
-**预估成本**：1-3 小时，主要在定位 albumentations 配置 vs 真实 bbox 数据的兼容性。
+**预估成本**:1-3 小时,主要在定位 albumentations 配置 vs 真实 bbox 数据的兼容性。
 
-**修复后基线**：
-test_augmentation.py 范围内 `5 failed` 应清零，全套测试基线变为 `165 passed, 0 failed`。
+**修复后基线**:
+test_augmentation.py 范围内 `5 failed` 应清零,全套测试基线变为 `185 passed, 0 failed`(以 codegen 修复完成后基线为准)。
 
 ---
 
 ## [P2 · Phase 5 落地依赖] 删除 ModelBuilderConfig 时前端弹警告
 
-**背景**：
-P5-S1（2026-04-27）在 `ModelBuilderConfig.training_jobs` 设 `cascade="all, delete-orphan"`。删除 ModelBuilderConfig 时级联删除关联 TrainingJob 记录（含 metrics / weights_path / log_path 等训练产出）。后端 `ondelete="CASCADE"` + ORM cascade 双重保证。
+**背景**:
+P5-S1(2026-04-27)在 `ModelBuilderConfig.training_jobs` 设 `cascade="all, delete-orphan"`。删除 ModelBuilderConfig 时级联删除关联 TrainingJob 记录(含 metrics / weights_path / log_path 等训练产出)。后端 `ondelete="CASCADE"` + ORM cascade 双重保证。
 
-**现状**：
-ORM 层级联删除已落地，但前端模型构建器删除按钮当前**直接发删除请求**，没有提示用户级联删除的影响。
+**现状**:
+ORM 层级联删除已落地,但前端模型构建器删除按钮当前**直接发删除请求**,没有提示用户级联删除的影响。
 
-**修法**：
-前端在 ModelBuilderConfig 删除操作触发前（列表页 / 详情页删除按钮），弹 confirm 对话框：
+**修法**:
+前端在 ModelBuilderConfig 删除操作触发前(列表页 / 详情页删除按钮),弹 confirm 对话框:
 
-> 删除此画布配置将一并删除关联的 N 个训练任务及其训练指标、模型权重。此操作不可恢复，是否继续？
+> 删除此画布配置将一并删除关联的 N 个训练任务及其训练指标、模型权重。此操作不可恢复,是否继续?
 
-用户明确点击"确认"后才发删除请求。N 来源：后端 GET `/api/v1/model-configs/{id}` 时一并返回 `training_jobs_count`（或类似字段），前端读取该字段。如果列表页直接删除，确认列表 API 是否也包含该字段。
+用户明确点击"确认"后才发删除请求。N 来源:后端 GET `/api/v1/model-configs/{id}` 时一并返回 `training_jobs_count`(或类似字段),前端读取该字段。如果列表页直接删除,确认列表 API 是否也包含该字段。
 
-**文件**：
-- `frontend/src/pages/admin/ModelBuilder*.tsx`（实际位置以现役代码为准）
-- 可能要新增前端共用 confirm 组件（如果删除入口分布多处）
-- `backend/app/api/v1/model_builder.py`（GET 端点加 training_jobs_count 字段）
+**文件**:
+- `frontend/src/pages/admin/ModelBuilder*.tsx`(实际位置以现役代码为准)
+- 可能要新增前端共用 confirm 组件(如果删除入口分布多处)
+- `backend/app/api/v1/model_builder.py`(GET 端点加 training_jobs_count 字段)
 
-**触发修复时机**：
-P5-S5（前端 TrainingPage）起草时一并落地，但**必须在前端开放删除按钮给真实用户前**完成，否则有误删风险。
+**触发修复时机**:
+P5-S5(前端 TrainingPage)起草时一并落地,**必须在前端开放删除按钮给真实用户前**完成,否则有误删风险。
 
-**预估成本**：1-2 小时（后端加字段 + 前端加 confirm 对话框）。
+**预估成本**:1-2 小时(后端加字段 + 前端加 confirm 对话框)。
 
 ---
 
 ## [P3] detection.py / module_definition.py 的 Pydantic V2 警告
 
-**背景**：
-P5-S1（2026-04-27）在 training schema 加了 `ConfigDict(protected_namespaces=())` 消除了 `model_builder_config_id` 触发的 Pydantic V2 protected namespace 警告。但 P5-S1 自验输出显示，项目内还有 2 处同类警告未处理。
+**背景**:
+P5-S1(2026-04-27)在 training schema 加 `ConfigDict(protected_namespaces=())` 消除了 `model_builder_config_id` 触发的 Pydantic V2 protected namespace 警告。但 P5-S1 自验输出显示,项目内还有 2 处同类警告未处理。
 
-**现状**：
+**现状**:
 - `backend/app/models/detection.py` — `model_id` 字段触发 `Field "model_id" has conflict with protected namespace "model_"`
 - `backend/app/models/module_definition.py` — `schema_json` 字段触发 `schema_json shadows an attribute`
 
-**修法**：
-对涉及的 Pydantic 类（应该是 schema 而非 ORM，看 P5-S1 报告未明确）加 `model_config = ConfigDict(protected_namespaces=())`，或重命名字段。
+**修法**:
+对涉及的 Pydantic 类(应该是 schema 而非 ORM,看 P5-S1 报告未明确)加 `model_config = ConfigDict(protected_namespaces=())`,或重命名字段。
 
-**触发修复时机**：
-Phase 5 主体完成前后，或下次动 detection / module_definition 模块时顺手修。不阻塞 Phase 5。
+**触发修复时机**:
+Phase 5 主体完成前后,或下次动 detection / module_definition 模块时顺手修。不阻塞 Phase 5。
 
-**预估成本**：15-30 分钟（两个文件各加一行 ConfigDict 配置）。
+**预估成本**:15-30 分钟(两个文件各加一行 ConfigDict 配置)。
+
+---
+
+## [P3] augmentation 模块权限校验下沉到 service 层
+
+**背景**:
+P5-S2-HF1(2026-04-27)在 training 模块把权限校验放在 service 层(`_check_job_ownership` 辅助方法),API 层只传 `current_user_id`。这是更干净的分层:service 可独立测试,API 层只关心 HTTP 协议。
+
+augmentation 模块现役权限校验在 API 层(端点函数内直接 `if job.created_by != current_user.user_id`),service 层完全不感知用户身份。
+
+**现状**:
+两个模块权限分层不一致。training 是健康分层,augmentation 是历史习惯。
+
+**修法**:
+augmentation_service.py 的相关方法签名加 `current_user_id` 参数,把权限校验从 API 层下沉。API 层保留 `Depends(get_current_user)`,把 user_id 传给 service。
+
+**触发修复时机**:
+augmentation 模块下次有结构性改动时(如修 [P1] augmentation 服务边界框翻转 bug 涉及 service 层时)顺手做。不阻塞任何当前功能。
+
+**预估成本**:1-2 小时。
+
+**关联**:
+- [P1] augmentation 服务边界框翻转 bug
+
+---
+
+## [P3] P5-S3-Recon PoC 脚本归档
+
+**背景**:
+P5-S3-Recon-1 + Recon-2(2026-04-27)产出了 4 个 untracked 文件:
+- `backend/scripts/recon_celery_ultralytics_poc.py` — Recon-1 PoC(独立 Celery app + ultralytics setattr 注入验证)
+- `backend/scripts/recon_report.md` — Recon-1 报告
+- `backend/scripts/recon_codegen_signature_poc.py` — Recon-2 PoC(codegen 4 类签名验证)
+- `backend/scripts/recon_codegen_signature_report.md` — Recon-2 报告(必读!)
+
+**现状**:
+均为 git untracked 状态(本任侦察约束:不主动 commit 主代码)。
+
+**保留价值**:
+- Recon-2 报告是 codegen gap 完整诊断,**P0 codegen 修复任务的核心起点**
+- Recon-1 PoC 脚本提供 Celery 独立 app 启动 + setattr 注入模式,P5-S3 实现可参考
+- Recon-2 PoC 脚本提供 codegen 4 类验证的最小调试入口,codegen 修复期间复用
+
+**触发处理时机**:
+codegen 修复(P0)+ P5-S3 主体完成后:
+- 如果 P5-S3 实现完整覆盖了 PoC 验证场景 → 删除
+- 如果只覆盖部分 → 保留作为长期回归验证脚本
+- 或统一移到独立 `backend/scripts/recon/` 子目录归档
+
+**预估成本**:5-15 分钟。
+
+**关联**:
+- [P0] codegen 修复 — 期间会重度复用 Recon-2 报告 + Recon-2 PoC
+- 详细诊断:`backend/scripts/recon_codegen_signature_report.md`
