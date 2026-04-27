@@ -69,6 +69,13 @@ class TrainingJob(BaseModel):
         comment="训练指标"
     )
     
+    # 错误信息
+    error_message: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="错误信息"
+    )
+    
     # 最佳权重路径
     best_weights_path: Mapped[Optional[str]] = mapped_column(
         String(500),
@@ -114,7 +121,7 @@ class TrainingJob(BaseModel):
     
     # 关系
     model_builder_config: Mapped["ModelBuilderConfig"] = relationship(
-        "ModelBuilderConfig"
+        "ModelBuilderConfig", back_populates="training_jobs"
     )
     dataset: Mapped["Dataset"] = relationship(
         "Dataset",

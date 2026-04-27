@@ -5,7 +5,7 @@
 """
 from typing import Optional, Dict, Any, List
 from sqlalchemy import String, Text, ForeignKey, Boolean, Enum
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from app.db.base import BaseModel
@@ -97,6 +97,11 @@ class ModelBuilderConfig(BaseModel):
         default=1,
         nullable=False,
         comment="版本号"
+    )
+    
+    # 关联的训练任务
+    training_jobs: Mapped[List["TrainingJob"]] = relationship(
+        "TrainingJob", back_populates="model_builder_config", cascade="all, delete-orphan"
     )
     
     def __repr__(self) -> str:
