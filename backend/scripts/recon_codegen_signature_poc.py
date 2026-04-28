@@ -26,6 +26,8 @@ import torch.nn as nn
 
 from app.ml.runtime.codegen import generate_module_code
 from app.ml.modules.dynamic_builder import _default_schema_resolver
+from app.ml.runtime.ultralytics_patch import apply_ultralytics_patches
+apply_ultralytics_patches()
 
 
 def _load_schema(name: str) -> dict:
