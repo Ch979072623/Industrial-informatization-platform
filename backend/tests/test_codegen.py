@@ -83,7 +83,7 @@ def test_codegen_valid_python():
 def test_codegen_init_has_params():
     schema = _load_schema("pmsfa")
     code = generate_module_code(schema, expand_composites=False)
-    assert "def __init__(self, inc):" in code
+    assert "def __init__(self, inc=64):" in code
 
 
 def test_codegen_cycle_raises():

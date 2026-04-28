@@ -96,20 +96,16 @@ def _extract_vars_from_expr(expr: str) -> List[str]:
     return [v for v in found if v not in builtin_names]
 
 
-def _get_init_params(sub_nodes: List[Dict[str, Any]], topo_order: List[str]) -> List[str]:
-    node_map = {n["id"]: n for n in sub_nodes}
-    vars_found: List[str] = []
-    vars_set: Set[str] = set()
-    for node_id in topo_order:
-        node = node_map[node_id]
-        for v in node.get("params", {}).values():
-            if isinstance(v, str) and v.startswith("${") and v.endswith("}"):
-                expr = v[2:-1]
-                for var in _extract_vars_from_expr(expr):
-                    if var not in vars_set:
-                        vars_set.add(var)
-                        vars_found.append(var)
-    return vars_found
+def _get_init_params(params_schema: List[Dict[str, Any]]) -> List[str]:
+    """基于 params_schema 生成 __init__ 参数列表，保持字段定义顺序并包含默认值。"""
+    params: List[str] = []
+    for spec in params_schema:
+        name = spec["name"]
+        if "default" in spec:
+            params.append(f"{name}={_format_param_value(spec['default'])}")
+        else:
+            params.append(name)
+    return params
 
 
 def _topological_sort(sub_nodes: List[Dict[str, Any]], sub_edges: List[Dict[str, Any]]) -> List[str]:
@@ -229,7 +225,8 @@ def generate_module_code(
                     composite_set.add(t)
                 continue
 
-    init_params = _get_init_params(sub_nodes, topo_order)
+    params_schema = schema_json.get("params_schema", [])
+    init_params = _get_init_params(params_schema)
 
     lines: List[str] = []
 
