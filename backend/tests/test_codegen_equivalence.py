@@ -3,6 +3,7 @@ B-4: 验证 generate_module_code 生成的静态代码与 schema_to_module 动�
 forward() 输出数值等价。
 
 覆盖：PMSFA / FocusFeature / Detect_SASD + 3 个其他 builtin composite。
+关键约束：使用位置参数实例化生成类，模拟 ultralytics parse_model 生产调用模式。
 """
 
 import inspect
@@ -18,10 +19,8 @@ from app.ml.modules.dynamic_builder import schema_to_module, _default_schema_res
 
 
 # 测试内对已知 codegen 生成缺陷做补丁，不修改生产代码。
-_KNOWN_CODE_PATCHES = [
-    # Conv_GN 的 schema 默认 p=None/g=1 未被 generate_module_code 传递到生成签名
-    ("def __init__(self, c1, c2, k, s, p, g):", "def __init__(self, c1, c2, k, s, p=None, g=1):"),
-]
+# C-1.1 修复后 Conv_GN 默认值已对齐，保留空列表以兼容历史机制。
+_KNOWN_CODE_PATCHES = []
 
 
 def _patch_generated_code(code_str: str) -> str:
@@ -46,18 +45,18 @@ def _default_params(schema: Dict[str, Any]) -> Dict[str, Any]:
     return params
 
 
-def _exec_generated(schema: Dict[str, Any]) -> nn.Module:
-    """路径 A：generate_module_code → 补丁 → exec → 用默认参数实例化。"""
+def _exec_generated_positional(schema: Dict[str, Any]) -> nn.Module:
+    """路径 A：generate_module_code → exec → 用位置参数实例化（模拟 ultralytics parse_model）。"""
     code_str = generate_module_code(schema, expand_composites=True, _resolver=_default_schema_resolver)
     code_str = _patch_generated_code(code_str)
     namespace: Dict[str, Any] = {}
     exec(compile(code_str, "<generated>", "exec"), namespace)
     class_name = schema.get("type", "GeneratedModule")
     params = _default_params(schema)
-    # 过滤掉生成类签名中不接受的参数（如 C2f 的 n 不会被用到签名中）
-    sig = inspect.signature(namespace[class_name].__init__)
-    filtered = {k: v for k, v in params.items() if k in sig.parameters}
-    return namespace[class_name](**filtered)
+    # 按 params_schema 顺序构造位置参数 args，模拟 ultralytics parse_model 的 *args 调用
+    param_order = [p["name"] for p in schema.get("params_schema", [])]
+    args = [params[k] for k in param_order]
+    return namespace[class_name](*args)
 
 
 def _build_dynamic(schema: Dict[str, Any]) -> nn.Module:
@@ -78,12 +77,12 @@ def _assert_close(out_a, out_b):
 
 
 # ---------------------------------------------------------------------------
-# 论文模块（3个）
+# 论文模块（3个）— 使用位置参数调用模拟 parse_model 生产场景
 # ---------------------------------------------------------------------------
 
-def test_equiv_pmsfa():
+def test_parse_model_positional_call_compat_pmsfa():
     schema = json.load(open("app/ml/modules/composite/pmsfa/schema.json", encoding="utf-8"))
-    module_a = _exec_generated(schema)
+    module_a = _exec_generated_positional(schema)
     module_b = _build_dynamic(schema)
 
     _set_uniform_weights(module_a, 0.1)
@@ -98,9 +97,9 @@ def test_equiv_pmsfa():
     _assert_close(out_a, out_b)
 
 
-def test_equiv_focusfeature():
+def test_parse_model_positional_call_compat_focusfeature():
     schema = json.load(open("app/ml/modules/composite/focusfeature/schema.json", encoding="utf-8"))
-    module_a = _exec_generated(schema)
+    module_a = _exec_generated_positional(schema)
     module_b = _build_dynamic(schema)
 
     _set_uniform_weights(module_a, 0.1)
@@ -117,9 +116,9 @@ def test_equiv_focusfeature():
     _assert_close(out_a, out_b)
 
 
-def test_equiv_detect_sasd():
+def test_parse_model_positional_call_compat_detect_sasd():
     schema = json.load(open("app/ml/modules/composite/detect_sasd/schema.json", encoding="utf-8"))
-    module_a = _exec_generated(schema)
+    module_a = _exec_generated_positional(schema)
     module_b = _build_dynamic(schema)
 
     _set_uniform_weights(module_a, 0.1)
@@ -137,12 +136,12 @@ def test_equiv_detect_sasd():
 
 
 # ---------------------------------------------------------------------------
-# 其他 builtin composite（3个）
+# 其他 builtin composite（3个）— 同样使用位置参数
 # ---------------------------------------------------------------------------
 
-def test_equiv_adown():
+def test_parse_model_positional_call_compat_adown():
     schema = json.load(open("app/ml/modules/composite/adown/schema.json", encoding="utf-8"))
-    module_a = _exec_generated(schema)
+    module_a = _exec_generated_positional(schema)
     module_b = _build_dynamic(schema)
 
     _set_uniform_weights(module_a, 0.1)
@@ -157,9 +156,9 @@ def test_equiv_adown():
     _assert_close(out_a, out_b)
 
 
-def test_equiv_resblock():
+def test_parse_model_positional_call_compat_resblock():
     schema = json.load(open("app/ml/modules/composite/resblock/schema.json", encoding="utf-8"))
-    module_a = _exec_generated(schema)
+    module_a = _exec_generated_positional(schema)
     module_b = _build_dynamic(schema)
 
     _set_uniform_weights(module_a, 0.1)
@@ -174,9 +173,9 @@ def test_equiv_resblock():
     _assert_close(out_a, out_b)
 
 
-def test_equiv_fpn():
+def test_parse_model_positional_call_compat_fpn():
     schema = json.load(open("app/ml/modules/composite/fpn/schema.json", encoding="utf-8"))
-    module_a = _exec_generated(schema)
+    module_a = _exec_generated_positional(schema)
     module_b = _build_dynamic(schema)
 
     _set_uniform_weights(module_a, 0.1)
