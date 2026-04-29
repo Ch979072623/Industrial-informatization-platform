@@ -16,6 +16,19 @@ from pathlib import Path
 from dataclasses import dataclass, field
 import numpy as np
 from PIL import Image
+from fastapi import HTTPException, status
+from sqlalchemy import select, desc, func, and_
+from sqlalchemy.ext.asyncio import AsyncSession
+from celery.result import AsyncResult
+
+from app.models.augmentation import AugmentationJob
+from app.schemas.augmentation import (
+    AugmentationJobCreate,
+    AugmentationJobListQuery,
+    JobControlRequest,
+    JobControlResponse,
+    JobProgressResponse,
+)
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -754,6 +767,238 @@ class AugmentationService:
             )
         
         return result
+
+
+class AugmentationJobService:
+    """增强任务服务"""
+    
+    def __init__(self, db: AsyncSession):
+        self.db = db
+    
+    def _check_job_ownership(self, job: AugmentationJob, current_user_id: str) -> None:
+        """检查任务所有权,无权限则抛 403"""
+        if job.created_by != current_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权访问此任务"
+            )
+    
+    async def create_job(
+        self,
+        request: AugmentationJobCreate,
+        current_user_id: str
+    ) -> AugmentationJob:
+        """
+        创建增强任务
+        
+        1. 校验流水线配置
+        2. 校验源数据集存在
+        3. 检查数据集访问权限
+        4. 创建 AugmentationJob ORM
+        5. 提交 Celery task
+        """
+        from app.models.dataset import Dataset
+        from app.tasks.augmentation_task import augment_dataset_task
+        
+        # 验证配置
+        is_valid, error_msg = AugmentationConfig.validate_pipeline_config(request.pipeline_config)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"配置验证失败: {error_msg}"
+            )
+        
+        # 检查源数据集
+        result = await self.db.execute(
+            select(Dataset).where(Dataset.id == request.source_dataset_id)
+        )
+        source_dataset = result.scalar_one_or_none()
+        
+        if not source_dataset:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="源数据集不存在"
+            )
+        
+        # 检查数据集访问权限
+        if source_dataset.created_by != current_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权访问此数据集"
+            )
+        
+        # 创建任务记录
+        job = AugmentationJob(
+            name=request.name,
+            source_dataset_id=request.source_dataset_id,
+            pipeline_config=request.pipeline_config,
+            augmentation_factor=request.augmentation_factor,
+            status="pending",
+            progress=0.0,
+            processed_count=0,
+            total_count=0,
+            generated_count=0,
+            created_by=current_user_id
+        )
+        
+        self.db.add(job)
+        await self.db.commit()
+        await self.db.refresh(job)
+        
+        # 启动 Celery 任务
+        try:
+            output_name = request.new_dataset_name or f"{source_dataset.name}_augmented"
+            
+            celery_task = augment_dataset_task.delay(
+                job_id=job.id,
+                dataset_id=request.source_dataset_id,
+                pipeline_config=request.pipeline_config,
+                augmentation_factor=request.augmentation_factor,
+                output_dataset_name=output_name,
+                class_names=source_dataset.class_names,
+                target_split=request.target_split,
+                include_original=request.include_original
+            )
+            
+            job.celery_task_id = celery_task.id
+            await self.db.commit()
+            
+            logger.info(f"用户 {current_user_id} 创建增强任务: {job.id}, celery_task={celery_task.id}")
+            
+        except Exception as e:
+            logger.error(f"启动 Celery 增强任务失败: {e}")
+            job.status = "failed"
+            job.error_message = f"启动 Celery 任务失败: {str(e)}"
+            await self.db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"启动增强任务失败: {str(e)}"
+            )
+        
+        return job
+    
+    async def list_jobs(
+        self,
+        query: AugmentationJobListQuery,
+        current_user_id: str
+    ) -> Tuple[List[AugmentationJob], int]:
+        """
+        列出增强任务
+        
+        支持按状态和数据集筛选
+        只返回当前用户创建的任务
+        """
+        conditions = [AugmentationJob.created_by == current_user_id]
+        
+        if query.status:
+            conditions.append(AugmentationJob.status == query.status)
+        if query.source_dataset_id:
+            conditions.append(AugmentationJob.source_dataset_id == query.source_dataset_id)
+        
+        # 获取总数
+        count_query = select(func.count()).select_from(AugmentationJob).where(and_(*conditions))
+        count_result = await self.db.execute(count_query)
+        total = count_result.scalar() or 0
+        
+        # 获取分页数据
+        stmt = (
+            select(AugmentationJob)
+            .where(and_(*conditions))
+            .order_by(desc(AugmentationJob.created_at))
+            .offset((query.page - 1) * query.page_size)
+            .limit(query.page_size)
+        )
+        
+        result = await self.db.execute(stmt)
+        jobs = result.scalars().all()
+        
+        return list(jobs), total
+    
+    async def get_job(self, job_id: str, current_user_id: str) -> AugmentationJob:
+        """获取增强任务详情"""
+        result = await self.db.execute(
+            select(AugmentationJob).where(AugmentationJob.id == job_id)
+        )
+        job = result.scalar_one_or_none()
+        
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="任务不存在"
+            )
+        
+        self._check_job_ownership(job, current_user_id)
+        return job
+    
+    async def get_job_progress(
+        self,
+        job_id: str,
+        current_user_id: str
+    ) -> JobProgressResponse:
+        """获取任务进度"""
+        job = await self.get_job(job_id, current_user_id)
+        
+        # 从 Celery 获取最新状态
+        if job.celery_task_id:
+            celery_result = AsyncResult(job.celery_task_id)
+            if celery_result.state == 'PROGRESS':
+                meta = celery_result.info or {}
+                job.progress = meta.get('percent', job.progress)
+                job.generated_count = meta.get('generated', job.generated_count)
+        
+        # 计算预计剩余时间
+        estimated_remaining = None
+        if job.status == "running" and job.timing_stats:
+            images_per_second = job.timing_stats.get('images_per_second', 0)
+            remaining_images = job.total_count - job.generated_count
+            if images_per_second > 0:
+                estimated_remaining = int(remaining_images / images_per_second)
+        
+        return JobProgressResponse(
+            job_id=job.id,
+            status=job.status,
+            progress=job.progress,
+            processed_count=job.processed_count,
+            total_count=job.total_count,
+            generated_count=job.generated_count,
+            current_operation=None,
+            estimated_time_remaining=estimated_remaining
+        )
+    
+    async def control_job(
+        self,
+        job_id: str,
+        request: JobControlRequest,
+        current_user_id: str
+    ) -> JobControlResponse:
+        """
+        控制增强任务
+        
+        支持 pause（暂停）、resume（恢复）、cancel（取消）
+        """
+        from app.tasks.augmentation_task import control_augmentation_job
+        
+        job = await self.get_job(job_id, current_user_id)
+        
+        # 发送控制命令
+        control_result = control_augmentation_job.delay(job_id, request.action)
+        result_data = control_result.get(timeout=5)
+        
+        if result_data.get("success"):
+            # 更新数据库状态
+            if request.action == "pause":
+                job.status = "paused"
+            elif request.action == "resume":
+                job.status = "running"
+            elif request.action == "cancel":
+                job.status = "cancelled"
+            await self.db.commit()
+        
+        return JobControlResponse(
+            success=result_data.get("success", False),
+            new_status=job.status,
+            message=result_data.get("message", "")
+        )
 
 
 # 全局服务实例
