@@ -107,3 +107,9 @@ def _patch_guess_model_task() -> None:
 
     patched_func = types.FunctionType(new_func_code, orig_func.__globals__, "guess_model_task")
     _ult_tasks.guess_model_task = patched_func
+
+    # 同步 engine.model 中通过 `from ultralytics.nn.tasks import guess_model_task` 绑定的局部引用
+    import sys
+
+    if "ultralytics.engine.model" in sys.modules:
+        sys.modules["ultralytics.engine.model"].guess_model_task = patched_func
