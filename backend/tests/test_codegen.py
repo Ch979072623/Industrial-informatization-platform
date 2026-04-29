@@ -107,7 +107,8 @@ def test_codegen_cycle_raises():
 def test_codegen_forward_params_from_proxy_inputs():
     schema = _load_schema("focusfeature")
     code = generate_module_code(schema, expand_composites=False)
-    assert "def forward(self, p5_in, p4_in, p3_in):" in code
+    assert "def forward(self, x):" in code
+    assert "p5_in, p4_in, p3_in = x" in code
 
 
 def test_codegen_multi_output_indexing():
