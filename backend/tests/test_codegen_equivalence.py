@@ -110,8 +110,9 @@ def test_parse_model_positional_call_compat_focusfeature():
     p4_in = torch.randn(1, 256, 16, 16)
     p3_in = torch.randn(1, 128, 32, 32)
 
-    out_a = module_a(p5_in, p4_in, p3_in)
-    out_b = module_b(p5_in, p4_in, p3_in)
+    inputs = [p5_in, p4_in, p3_in]
+    out_a = module_a(inputs)
+    out_b = module_b(inputs)
 
     _assert_close(out_a, out_b)
 
@@ -129,8 +130,9 @@ def test_parse_model_positional_call_compat_detect_sasd():
     n4_in = torch.randn(1, 512, 32, 32)
     n5_in = torch.randn(1, 1024, 32, 32)
 
-    out_a = module_a(n3_in, n4_in, n5_in)
-    out_b = module_b(n3_in, n4_in, n5_in)
+    inputs = [n3_in, n4_in, n5_in]
+    out_a = module_a(inputs)
+    out_b = module_b(inputs)
 
     _assert_close(out_a, out_b)
 
@@ -186,7 +188,8 @@ def test_parse_model_positional_call_compat_fpn():
     p4 = torch.randn(1, 256, 16, 16)
     p3 = torch.randn(1, 128, 32, 32)
 
-    out_a = module_a(p5, p4, p3)
-    out_b = module_b(p5, p4, p3)
+    inputs = [p5, p4, p3]
+    out_a = module_a(inputs)
+    out_b = module_b(inputs)
 
     _assert_close(out_a, out_b)
