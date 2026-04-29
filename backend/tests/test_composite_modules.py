@@ -89,8 +89,8 @@ class TestFocusFeature:
         p3 = torch.randn(2, 128, 64, 64)
 
         with torch.no_grad():
-            y_ref = ref(p5, p4, p3)
-            y_dyn = dyn(p5, p4, p3)
+            y_ref = ref([p5, p4, p3])
+            y_dyn = dyn([p5, p4, p3])
 
         assert y_ref.shape == y_dyn.shape, f"shape mismatch: {y_ref.shape} vs {y_dyn.shape}"
         torch.testing.assert_close(y_ref, y_dyn, atol=1e-4, rtol=1e-4)
@@ -120,7 +120,7 @@ class TestDetectSASD:
 
         with torch.no_grad():
             y_ref = ref([n3, n4, n5])   # 论文源码接受 list
-            y_dyn = dyn(n3, n4, n5)     # 动态构图接受 unpacked
+            y_dyn = dyn([n3, n4, n5])   # 动态构图对齐 ultralytics 协议
 
         assert len(y_ref) == len(y_dyn) == 3
         for i in range(3):
@@ -331,8 +331,8 @@ class TestFPN:
         p3 = torch.randn(2, 128, 64, 64)
 
         with torch.no_grad():
-            y_ref = ref(p5, p4, p3)
-            y_dyn = dyn(p5, p4, p3)
+            y_ref = ref([p5, p4, p3])
+            y_dyn = dyn([p5, p4, p3])
 
         assert len(y_ref) == len(y_dyn) == 3
         for i in range(3):
