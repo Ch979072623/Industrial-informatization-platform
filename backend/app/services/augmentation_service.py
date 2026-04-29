@@ -173,7 +173,7 @@ class AlbumentationAugmenter:
         
         # 添加边界框参数
         bbox_params = BboxParams(
-            format='pascal_voc',  # [x_min, y_min, x_max, y_max]
+            format='yolo',  # [x_center, y_center, width, height]
             label_fields=['class_ids'],
             min_visibility=0.1,  # 至少10%可见
         )
@@ -345,11 +345,12 @@ class AlbumentationAugmenter:
         try:
             transform = self.create_transform(pipeline_config)
             
-            # 准备边界框数据
+            # 准备边界框数据（先 clamp 确保符合 albumentations YOLO 格式要求）
             albumentations_bboxes = []
             class_ids = []
             for bbox in bboxes:
-                alb_bbox = bbox.to_albumentations()
+                clamped = bbox.clamp()
+                alb_bbox = clamped.to_albumentations()
                 albumentations_bboxes.append(alb_bbox[:4])  # [x, y, w, h]
                 class_ids.append(alb_bbox[4])  # class_id
             
@@ -363,13 +364,7 @@ class AlbumentationAugmenter:
             # 转换回 BBox 对象
             transformed_bboxes = []
             for bbox_data, class_id in zip(transformed['bboxes'], transformed['class_ids']):
-                bbox = BBox(
-                    x1=bbox_data[0],
-                    y1=bbox_data[1],
-                    x2=bbox_data[2],
-                    y2=bbox_data[3],
-                    class_id=int(class_id)
-                ).clamp()
+                bbox = BBox.from_albumentations(list(bbox_data) + [class_id]).clamp()
                 # 过滤无效框
                 if bbox.x2 > bbox.x1 and bbox.y2 > bbox.y1:
                     transformed_bboxes.append(bbox)
