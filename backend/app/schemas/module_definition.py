@@ -3,11 +3,18 @@ ModuleDefinition 相关 Schema
 
 为 GET /api/v1/models/modules 提供类型安全的响应结构。
 """
+import warnings
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
+# 抑制 schema_json 字段与 BaseModel.schema_json() 方法名冲突的 shadowing 警告
+warnings.filterwarnings(
+    "ignore",
+    message='Field name "schema_json" shadows an attribute in parent',
+    category=UserWarning,
+)
 
 class ModuleDefinitionListItem(BaseModel):
     """模块列表项（轻量版，不含 sub_nodes/sub_edges）"""
@@ -27,6 +34,7 @@ class ModuleDefinitionListItem(BaseModel):
 
 class ModuleDefinitionDetail(BaseModel):
     """模块详情（完整 schema_json，含内部子图；同时扁平化常用字段到顶层）"""
+    model_config = ConfigDict(protected_namespaces=())
 
     id: str = Field(..., description="模块ID")
     type: str = Field(..., description="模块类型标识符")
@@ -46,4 +54,4 @@ class ModuleDefinitionDetail(BaseModel):
 
 class ModuleDefinitionResponse(ModuleDefinitionDetail):
     """创建/更新模块后的响应（与 ModuleDefinitionDetail 同构）"""
-    pass
+    model_config = ConfigDict(protected_namespaces=())
