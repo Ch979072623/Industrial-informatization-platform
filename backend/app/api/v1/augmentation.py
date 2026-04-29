@@ -22,7 +22,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, and_, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-from celery.result import AsyncResult
 
 from app.api.deps import get_db, get_current_user
 from app.core.security import TokenData
@@ -48,16 +47,18 @@ from app.models.dataset import Dataset, DatasetImage
 from app.services.augmentation_service import (
     get_augmentation_service,
     AugmentationConfig,
-    BBox
-)
-from app.tasks.augmentation_task import (
-    augment_dataset_task,
-    control_augmentation_job
+    BBox,
+    AugmentationJobService,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/augmentation", tags=["数据增强"])
+
+
+def get_augmentation_job_service(db: AsyncSession = Depends(get_db)) -> AugmentationJobService:
+    """获取增强任务服务实例"""
+    return AugmentationJobService(db)
 
 
 # ==================== 工具函数 ====================
@@ -502,35 +503,14 @@ async def delete_template(
 async def list_jobs(
     query: AugmentationJobListQuery = Depends(),
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    service: AugmentationJobService = Depends(get_augmentation_job_service),
 ) -> APIResponse[PaginatedResponse[AugmentationJobResponse]]:
     """
     获取增强任务列表
     
     支持按状态和数据集筛选
     """
-    conditions = [AugmentationJob.created_by == current_user.user_id]
-    
-    if query.status:
-        conditions.append(AugmentationJob.status == query.status)
-    if query.source_dataset_id:
-        conditions.append(AugmentationJob.source_dataset_id == query.source_dataset_id)
-    
-    # 获取总数
-    from sqlalchemy import func
-    count_query = select(func.count()).select_from(AugmentationJob).where(and_(*conditions))
-    count_result = await db.execute(count_query)
-    total = count_result.scalar() or 0
-    
-    # 获取分页数据
-    result = await db.execute(
-        select(AugmentationJob)
-        .where(and_(*conditions))
-        .order_by(desc(AugmentationJob.created_at))
-        .offset((query.page - 1) * query.page_size)
-        .limit(query.page_size)
-    )
-    jobs = result.scalars().all()
+    jobs, total = await service.list_jobs(query, current_user.user_id)
     
     return APIResponse.success_response(
         data=PaginatedResponse.create(
@@ -547,123 +527,28 @@ async def create_job(
     request: AugmentationJobCreate,
     background_tasks: BackgroundTasks,
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    service: AugmentationJobService = Depends(get_augmentation_job_service),
 ) -> APIResponse[AugmentationJobResponse]:
     """
     创建增强任务
     
     提交数据增强任务到 Celery 执行
     """
-    # 验证配置
-    is_valid, error_msg = AugmentationConfig.validate_pipeline_config(request.pipeline_config)
-    if not is_valid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"配置验证失败: {error_msg}"
-        )
-    
-    # 检查源数据集
-    result = await db.execute(
-        select(Dataset).where(Dataset.id == request.source_dataset_id)
+    job = await service.create_job(request, current_user.user_id)
+    return APIResponse.success_response(
+        data=AugmentationJobResponse.model_validate(job),
+        message="增强任务已提交"
     )
-    source_dataset = result.scalar_one_or_none()
-    
-    if not source_dataset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="源数据集不存在"
-        )
-    
-    # 检查数据集访问权限
-    if source_dataset.created_by != current_user.user_id and current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权访问此数据集"
-        )
-    
-    # 创建任务记录
-    job = AugmentationJob(
-        name=request.name,
-        source_dataset_id=request.source_dataset_id,
-        pipeline_config=request.pipeline_config,
-        augmentation_factor=request.augmentation_factor,
-        status="pending",
-        progress=0.0,
-        processed_count=0,
-        total_count=0,
-        generated_count=0,
-        created_by=current_user.user_id
-    )
-    
-    db.add(job)
-    await db.commit()
-    await db.refresh(job)
-    
-    # 启动 Celery 任务
-    try:
-        # 使用前端传递的新数据集名称，或生成默认名称
-        output_name = request.new_dataset_name or f"{source_dataset.name}_augmented"
-        
-        celery_task = augment_dataset_task.delay(
-            job_id=job.id,
-            dataset_id=request.source_dataset_id,
-            pipeline_config=request.pipeline_config,
-            augmentation_factor=request.augmentation_factor,
-            output_dataset_name=output_name,
-            class_names=source_dataset.class_names,
-            target_split=request.target_split,
-            include_original=request.include_original
-        )
-        
-        # 更新 Celery 任务ID
-        job.celery_task_id = celery_task.id
-        await db.commit()
-        
-        logger.info(f"用户 {current_user.user_id} 创建增强任务: {job.id}, celery_task={celery_task.id}")
-        
-        return APIResponse.success_response(
-            data=AugmentationJobResponse.model_validate(job),
-            message="增强任务已提交"
-        )
-        
-    except Exception as e:
-        # 任务启动失败，更新状态
-        job.status = "failed"
-        job.error_message = f"启动 Celery 任务失败: {str(e)}"
-        await db.commit()
-        
-        logger.error(f"启动 Celery 任务失败: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"启动增强任务失败: {str(e)}"
-        )
 
 
 @router.get("/jobs/{job_id}", response_model=APIResponse[AugmentationJobResponse])
 async def get_job(
     job_id: str,
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    service: AugmentationJobService = Depends(get_augmentation_job_service),
 ) -> APIResponse[AugmentationJobResponse]:
     """获取增强任务详情"""
-    result = await db.execute(
-        select(AugmentationJob).where(AugmentationJob.id == job_id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="任务不存在"
-        )
-    
-    # 检查权限
-    if job.created_by != current_user.user_id and current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权访问此任务"
-        )
-    
+    job = await service.get_job(job_id, current_user.user_id)
     return APIResponse.success_response(
         data=AugmentationJobResponse.model_validate(job)
     )
@@ -674,107 +559,26 @@ async def control_job(
     job_id: str,
     request: JobControlRequest,
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    service: AugmentationJobService = Depends(get_augmentation_job_service),
 ) -> APIResponse[JobControlResponse]:
     """
     控制增强任务
     
     支持 pause（暂停）、resume（恢复）、cancel（取消）
     """
-    result = await db.execute(
-        select(AugmentationJob).where(AugmentationJob.id == job_id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="任务不存在"
-        )
-    
-    # 检查权限
-    if job.created_by != current_user.user_id and current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权控制此任务"
-        )
-    
-    # 发送控制命令
-    control_result = control_augmentation_job.delay(job_id, request.action)
-    result_data = control_result.get(timeout=5)
-    
-    if result_data.get("success"):
-        # 更新数据库状态
-        if request.action == "pause":
-            job.status = "paused"
-        elif request.action == "resume":
-            job.status = "running"
-        elif request.action == "cancel":
-            job.status = "cancelled"
-        await db.commit()
-    
-    return APIResponse.success_response(
-        data=JobControlResponse(
-            success=result_data.get("success", False),
-            new_status=job.status,
-            message=result_data.get("message", "")
-        )
-    )
+    result = await service.control_job(job_id, request, current_user.user_id)
+    return APIResponse.success_response(data=result)
 
 
 @router.get("/jobs/{job_id}/progress", response_model=APIResponse[JobProgressResponse])
 async def get_job_progress(
     job_id: str,
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    service: AugmentationJobService = Depends(get_augmentation_job_service),
 ) -> APIResponse[JobProgressResponse]:
     """获取任务进度"""
-    result = await db.execute(
-        select(AugmentationJob).where(AugmentationJob.id == job_id)
-    )
-    job = result.scalar_one_or_none()
-    
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="任务不存在"
-        )
-    
-    # 检查权限
-    if job.created_by != current_user.user_id and current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无权访问此任务"
-        )
-    
-    # 从 Celery 获取最新状态
-    if job.celery_task_id:
-        celery_result = AsyncResult(job.celery_task_id)
-        if celery_result.state == 'PROGRESS':
-            meta = celery_result.info or {}
-            job.progress = meta.get('percent', job.progress)
-            job.generated_count = meta.get('generated', job.generated_count)
-    
-    # 计算预计剩余时间（基于生成速度）
-    estimated_remaining = None
-    if job.status == "running" and job.timing_stats:
-        images_per_second = job.timing_stats.get('images_per_second', 0)
-        remaining_images = job.total_count - job.generated_count
-        if images_per_second > 0:
-            estimated_remaining = int(remaining_images / images_per_second)
-    
-    return APIResponse.success_response(
-        data=JobProgressResponse(
-            job_id=job.id,
-            status=job.status,
-            progress=job.progress,
-            processed_count=job.processed_count,
-            total_count=job.total_count,
-            generated_count=job.generated_count,
-            current_operation=None,  # TODO: 从执行日志获取
-            estimated_time_remaining=estimated_remaining
-        )
-    )
+    progress = await service.get_job_progress(job_id, current_user.user_id)
+    return APIResponse.success_response(data=progress)
 
 
 # ==================== 预览功能 ====================
