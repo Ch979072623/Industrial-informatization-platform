@@ -57,14 +57,15 @@ class FocusFeature(nn.Module):
         # Pointwise conv
         self.pw_conv = nn.Conv2d(cat_channels, cat_channels, 1, bias=False)
 
-    def forward(self, p5, p4, p3):
+    def forward(self, x):
+        p5_in, p4_in, p3_in = x
         # 空间/通道对齐
-        p5 = self.p5_up(p5)
+        p5 = self.p5_up(p5_in)
         p5 = self.p5_conv(p5)
 
-        p4 = self.p4_conv(p4)
+        p4 = self.p4_conv(p4_in)
 
-        p3 = self.p3_down(p3)
+        p3 = self.p3_down(p3_in)
 
         # 拼接
         x = torch.cat([p5, p4, p3], dim=1)

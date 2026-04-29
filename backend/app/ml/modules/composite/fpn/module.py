@@ -38,11 +38,12 @@ class FPN(nn.Module):
 
         self.upsample = nn.Upsample(scale_factor=2, mode="nearest")
 
-    def forward(self, p5, p4, p3):
-        # p5, p4, p3 从低到高分辨率
-        n5 = self.lateral_convs[0](p5)
-        n4 = self.lateral_convs[1](p4) + self.upsample(n5)
-        n3 = self.lateral_convs[2](p3) + self.upsample(n4)
+    def forward(self, x):
+        p5_in, p4_in, p3_in = x
+        # p5_in, p4_in, p3_in 从低到高分辨率
+        n5 = self.lateral_convs[0](p5_in)
+        n4 = self.lateral_convs[1](p4_in) + self.upsample(n5)
+        n3 = self.lateral_convs[2](p3_in) + self.upsample(n4)
 
         n3 = self.fpn_convs[0](n3)
         n4 = self.fpn_convs[1](n4)
