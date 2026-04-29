@@ -246,13 +246,18 @@ class _CompositeModule(nn.Module):
             raise RuntimeError(f"子图中存在环路或不可达节点: {missing}")
         return order
 
-    def forward(self, *inputs: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         """
         执行前向传播
 
-        inputs 的顺序与 proxy_inputs 一致。
+        x 为单张量（单输入）或 list/tuple of tensors（多输入）。
         输出如果是单值直接返回张量；如果是多值返回 tuple。
         """
+        if isinstance(x, (list, tuple)) and len(self.proxy_inputs) > 1:
+            inputs = x
+        else:
+            inputs = [x]
+
         # node_inputs[node_id][port_index] = tensor
         node_inputs: Dict[str, Dict[int, torch.Tensor]] = {
             nid: {} for nid in self.sub_modules
@@ -278,6 +283,8 @@ class _CompositeModule(nn.Module):
                 raise RuntimeError(f"节点 {nid} 没有输入")
             if len(args) == 1:
                 output = module(args[0])
+            elif isinstance(module, _CompositeModule):
+                output = module(args)
             else:
                 output = module(*args)
 
