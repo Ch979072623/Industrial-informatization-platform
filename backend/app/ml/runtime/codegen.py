@@ -287,9 +287,13 @@ def generate_module_code(
     lines.append("")
 
     forward_params = [pi["name"] for pi in proxy_inputs]
-    if forward_params:
+    is_multi_input = len(forward_params) > 1
+    if is_multi_input:
+        lines.append("    def forward(self, x):")
         fp_str = ", ".join(forward_params)
-        lines.append(f"    def forward(self, {fp_str}):")
+        lines.append(f"        {fp_str} = x")
+    elif forward_params:
+        lines.append("    def forward(self, x):")
     else:
         lines.append("    def forward(self):")
 
