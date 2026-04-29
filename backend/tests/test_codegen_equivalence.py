@@ -193,3 +193,66 @@ def test_parse_model_positional_call_compat_fpn():
     out_b = module_b(inputs)
 
     _assert_close(out_a, out_b)
+
+
+# ---------------------------------------------------------------------------
+# Forward 列表调用协议测试（D12）— 验证 codegen 生成代码在 ultralytics m(x) 调用下正常
+# ---------------------------------------------------------------------------
+
+def test_forward_list_call_compat_focusfeature():
+    """验证 codegen 生成的 FocusFeature 在 ultralytics m(x) 列表调用下 forward 正常。"""
+    schema = json.load(open("app/ml/modules/composite/focusfeature/schema.json", encoding="utf-8"))
+    module = _exec_generated_positional(schema)
+    _set_uniform_weights(module, 0.1)
+
+    torch.manual_seed(42)
+    x = [
+        torch.randn(1, 512, 8, 8),
+        torch.randn(1, 256, 16, 16),
+        torch.randn(1, 128, 32, 32),
+    ]
+    out = module(x)
+
+    assert isinstance(out, torch.Tensor)
+    # 输出通道数 = int(inc[1] * e) * 3 = int(256 * 0.5) * 3 = 384
+    assert out.shape[1] == 384
+
+
+def test_forward_list_call_compat_detect_sasd():
+    """验证 codegen 生成的 Detect_SASD 在 ultralytics m(x) 列表调用下 forward 正常。"""
+    schema = json.load(open("app/ml/modules/composite/detect_sasd/schema.json", encoding="utf-8"))
+    module = _exec_generated_positional(schema)
+    _set_uniform_weights(module, 0.1)
+
+    torch.manual_seed(42)
+    x = [
+        torch.randn(1, 256, 32, 32),
+        torch.randn(1, 512, 32, 32),
+        torch.randn(1, 1024, 32, 32),
+    ]
+    out = module(x)
+
+    assert isinstance(out, tuple)
+    assert len(out) == 3
+    for o in out:
+        assert isinstance(o, torch.Tensor)
+
+
+def test_forward_list_call_compat_fpn():
+    """验证 codegen 生成的 FPN 在 ultralytics m(x) 列表调用下 forward 正常。"""
+    schema = json.load(open("app/ml/modules/composite/fpn/schema.json", encoding="utf-8"))
+    module = _exec_generated_positional(schema)
+    _set_uniform_weights(module, 0.1)
+
+    torch.manual_seed(42)
+    x = [
+        torch.randn(1, 512, 8, 8),
+        torch.randn(1, 256, 16, 16),
+        torch.randn(1, 128, 32, 32),
+    ]
+    out = module(x)
+
+    assert isinstance(out, tuple)
+    assert len(out) == 3
+    for o in out:
+        assert isinstance(o, torch.Tensor)
