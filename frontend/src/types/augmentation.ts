@@ -211,18 +211,38 @@ export interface PreviewRequest {
 
 /** 预览响应 */
 export interface PreviewResponse {
-  preview_image_url: string;
-  original_image_url: string;
-  applied_operations: string[];
-  annotations?: {
+  original: {
+    url: string;
+    width: number;
+    height: number;
+    bbox_count: number;
     bboxes: Array<{
+      id: string;
       x1: number;
       y1: number;
       x2: number;
       y2: number;
       class_id: number;
+      class_name?: string;
     }>;
   };
+  augmented: {
+    url: string;
+    width: number;
+    height: number;
+    bbox_count: number;
+    bboxes: Array<{
+      id: string;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      class_id: number;
+      class_name?: string;
+    }>;
+  };
+  applied_operations: string[];
+  processing_time_ms: number;
 }
 
 // ==================== 自定义脚本类型 ====================
