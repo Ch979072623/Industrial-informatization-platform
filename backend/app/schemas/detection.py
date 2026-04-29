@@ -3,7 +3,7 @@
 """
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class DefectInfo(BaseModel):
@@ -16,6 +16,7 @@ class DefectInfo(BaseModel):
 
 class DetectionRecordCreate(BaseModel):
     """检测记录创建 Schema"""
+    model_config = ConfigDict(protected_namespaces=())
     image_path: str = Field(description="图像路径")
     model_id: str = Field(description="模型ID")
     confidence_threshold: float = Field(default=0.5, ge=0, le=1, description="置信度阈值")
@@ -36,8 +37,7 @@ class DetectionRecordResponse(BaseModel):
     created_by: str = Field(description="创建者ID")
     created_at: datetime = Field(description="创建时间")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
 
 class DefectStatsResponse(BaseModel):
