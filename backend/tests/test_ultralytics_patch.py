@@ -64,7 +64,7 @@ def test_focus_feature_loads_in_official_ultralytics():
     p5 = torch.randn(1, 512, 8, 8)
     p4 = torch.randn(1, 256, 16, 16)
     p3 = torch.randn(1, 128, 32, 32)
-    out = model[-1](p5, p4, p3)
+    out = model[-1]([p5, p4, p3])
     assert isinstance(out, torch.Tensor)
 
 
@@ -97,7 +97,7 @@ def test_detect_sasd_loads_in_official_ultralytics():
     n3 = torch.randn(1, 256, 32, 32)
     n4 = torch.randn(1, 512, 32, 32)
     n5 = torch.randn(1, 1024, 32, 32)
-    out = model[-1](n3, n4, n5)
+    out = model[-1]([n3, n4, n5])
     assert isinstance(out, tuple)
     assert len(out) == 3
 
