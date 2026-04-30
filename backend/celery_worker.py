@@ -1,6 +1,9 @@
 """
 Celery Worker 入口
 """
+from app.ml.runtime.ultralytics_patch import apply_ultralytics_patches
+apply_ultralytics_patches()
+
 from celery import Celery
 from app.core.config import settings
 

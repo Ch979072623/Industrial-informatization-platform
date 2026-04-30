@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.db.session import engine
 from app.db.base import Base
+from app.ml.runtime.ultralytics_patch import apply_ultralytics_patches
 
 # 配置日志
 logging.basicConfig(
@@ -69,6 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     处理应用启动和关闭事件
     """
     # 启动事件
+    apply_ultralytics_patches()
     logger.info(f"启动 {settings.app_name} v{settings.app_version}")
     logger.info(f"环境: {settings.environment}")
 

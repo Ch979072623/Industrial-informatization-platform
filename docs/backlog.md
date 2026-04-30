@@ -1,934 +1,2271 @@
-# Backlog
 
 ## Phase 4b 清扫阶段完成记录（2026-04）
 
+  
+
 - PP-0（前端 vitest 基建）：完成
+
 - CL-01（档 1 机械清扫，unused imports/variables/types）：完成，46 条错误清零
+
 - CL-02a（α 方案扩散面扫描）：完成
+
 - CL-02b（α 方案全量重命名）：完成，14 条 TS2300 清零
 
+  
+
 **成果**：frontend TS 错误总数 145 → 83（减少 62 条，减少比例 43%）。
+
 **详细决策归档**：见 `docs/phase-4b-cleanup-summary.md`
+
+  
 
 ## P3 — 删除节点时 toast 显示 undefined
 
+  
+
 **现状**: 删除节点时 toast 显示 "已删除节点"，但如果 toast 想显示节点名，当前会读到 undefined。
+
 **修法**: toast 调用放在 `setNodes` 之前（先读 `selectedNode.data.displayName` 再删），或在 store 里保留被删节点的副本用于通知。
+
 **文件**: `frontend/src/components/model-builder/ModelCanvas.tsx`
+
+  
 
 ## P2 — Axios 并发刷新 token 竞态
 
+  
+
 **现状**: response interceptor 没有全局 refresh promise。多个并发请求同时 401 时，每个请求都会独立触发刷新流程，可能产生多余的 refresh 请求。
+
 **修法**: 用全局 `let refreshingPromise: Promise<void> | null = null` 让所有 401 请求等待同一个刷新完成。刷新完成后统一重试队列中的所有请求。
+
 **文件**: `frontend/src/services/api.ts`
+
 **影响**: 第四步展开复合节点时会频繁并发拉取详情 API，此问题会被放大。
 
+  
+
 **[已关闭 · Phase 4b 清扫阶段 INV-01 确认]**
+
 实际在 Phase 4a 已落地（frontend/src/services/api.ts 第 29 行 refreshingPromise + queueMicrotask 清锁）。
+
 本条为误挂，关闭。
+
+  
 
 ## P3: 模型配置保存时自动归一化节点坐标
 
+  
+
 **现状**：
+
 - React Flow 的 flow 坐标系原点可以不在视觉中心
+
 - 用户操作后节点坐标可能出现大负数（如 x: -1566, y: -324）
+
 - 当前靠 fitView 在加载时兜底显示，但保存下来的 YAML/JSON 里坐标是脏的
 
+  
+
 **影响**：
+
 - YAML diff 难以阅读（坐标偏移导致大量无意义变更）
+
 - 外部协作时（导入到其他工具）坐标体系不统一
 
+  
+
 **建议修复时机**：Phase 4b（YAML 导入导出）
+
 - 保存前遍历所有节点，找到最小 x/y，将所有节点平移使最小坐标为 (0,0)
+
 - 或在加载后提供"归一化坐标"按钮
 
+  
+
 ---
+
+  
 
 ### [Phase 5 前置任务] 领域模型命名规范确立
 
+  
+
 **性质**：非 P1/P2/P3，是 Phase 5 开工 gate，必做不可跳过
 
+  
+
 **背景**：
+
 Phase 4b 清扫阶段（CL-02）修复了 augmentation 和 generation 两个模块共享的 7 个同名类型（CreateTemplateRequest / UpdateTemplateRequest / CreateJobRequest / JobListQuery / JobControlRequest / JobControlResponse / JobProgressResponse）产生的 14 条 TS2300 duplicate identifier 错误。根因是两个业务模块自然共享"模板"和"任务"等领域概念，但未建立统一的命名前缀规范。
+
+  
 
 **触发时机**：Phase 5（训练模块）开工的第一条提示词之前。
 
+  
+
 **必做内容**：
+
 - 审视所有业务模块（augmentation/generation/training/testing/pruning/distillation）共享的公共概念（Template/Job/Config/Request/Response 等）
+
 - 确立 `<Module><Name>` 前缀命名规则作为项目规范（驼峰形式，例：AugmentationCreateTemplateRequest / TrainingCreateJobRequest）
+
 - 写进 `docs/coding-standards.md`（如该文件不存在则新建）
+
 - Phase 5 开工的第一条提示词必须显式引用这份规范
+
+  
 
 **不做的风险**：Phase 5 训练模块引入 CreateJobRequest / UpdateJobRequest / JobListQuery 等通用名字时，会和 augmentation/generation 再撞一次 TS2300，需要重复 CL-02 的清扫工作。
 
+  
+
 **预估成本**：规范制定 30 分钟，写文档 30 分钟，合计约 1 小时。
+
+  
 
 ## [P1] ApiResponse 泛型契约统一
 
+  
+
 **背景**：
+
 Phase 4b 清扫阶段 INV-01 报告显示，frontend 共有 12 条 TS18046 "is of type 'unknown'" 错误，全部分布在 `response.data.data` 或 `data` 的访问上，横跨 AugmentationPage、DatasetDetailPage、DatasetListPage、previewService.ts 等文件。根因是 axios 的 `ApiResponse<T>` 泛型契约未在类型定义层统一传递——某些接口未正确传入泛型参数，导致 `data` fallback 为 `unknown`。
+
+  
 
 **性质**：基础设施级类型契约问题，影响所有业务模块的 API 调用。
 
+  
+
 **触发时机**：开始任何新业务模块（Phase 5+）且涉及 API 调用前，或下次深度修改 `src/services/api.ts` 时。
+
+  
 
 **预估成本**：2-4 小时，需要系统审视 api.ts 的所有 endpoint 定义并逐一补齐泛型。
 
+  
+
 ## [P2] GenerationPage PlacementStrategy 类型对齐
 
+  
+
 **背景**：
+
 GenerationPage.tsx 当前有 37 条 TS 错误（TS2339 / TS2322 / TS2353 组合）源于 PlacementStrategy 类型定义与业务实现脱节。类型定义只声明了部分字段（例如 roi / type），但业务代码使用了更多字段（grid / heatmap / defects_per_image 等）。
+
+  
 
 **触发修复**：下次修改 GenerationPage.tsx 相关功能时顺手修。
 
+  
+
 **预估成本**：1-2 小时，需要先和产品确认 PlacementStrategy 支持哪些字段。
 
-## [P2] previewService 字段缺失
+  
+
+## [已修复 · 第六任清扫期 C-5a · 2026-04-29] [P2] previewService 字段缺失
+
+  
 
 **背景**：
+
 previewService.ts 有 11 条 TS2339 missing property 错误，源于 PreviewResponse 类型定义滞后于后端真实返回结构。
+
+  
 
 **触发修复**：下次动数据预览相关功能时顺手修。
 
+  
+
 **预估成本**：30 分钟 - 1 小时，需要对齐后端 /preview 接口实际返回字段。
+
+  **关闭语**:
+
+> **[已修复 · 第六任清扫期 C-5a · 2026-04-29]**
+> 重写 `frontend/src/types/augmentation.ts` 的 `PreviewResponse` 接口,对齐后端 `AugmentationPreviewResponse` schema(`original` / `augmented` 嵌套对象 + `processing_time_ms`)。11 条 TS2339 全部清零 + 2 条连带 TS7006 消除。前端 TS 错误总数 83 → 70。详见 commit `5c15915`。
+
+---
 
 ## [P3] GenerationCreateJobRequest dead export
 
+  
+
 **背景**：
+
 `src/types/generation.ts` 中保留的 `GenerationCreateJobRequest` 是 dead export，当前无任何代码 import。CL-02b 按"本轮范围"原则保留了这个 export。
+
+  
 
 **触发修复**：generation 模块功能稳定后（Phase 8 或之后）可删除。
 
+  
+
 **预估成本**：5 分钟。
+
+  
 
 ## [P3] zustand store 的 _get 命名偏离惯例
 
+  
+
 **背景**：
+
 项目 `tsconfig.json` 的 `noUnusedParameters` 选项强制要求未使用参数必须用下划线前缀（TypeScript 官方豁免机制）。这导致 `src/stores/augmentationStore.ts` 中 zustand immer middleware 的 `get` 参数必须写成 `_get`，偏离 zustand 社区通用命名惯例。
+
+  
 
 ESLint 的 `@typescript-eslint/no-unused-vars` 规则可以通过下划线或 eslint-disable 注释绕开，但这只影响 ESLint 不影响 TypeScript 编译器——两者是独立检查路径。
 
+  
+
 **触发修复**：项目做 tsconfig 大调整时（如果真要改 noUnusedParameters，需要评估全项目影响）。单独为美化命名修改 tsconfig 不值得。
+
+  
 
 **预估成本**：评估 tsconfig 影响 30 分钟，改动本身 5 分钟。
 
+  
+
 ## [已关闭 · 2026-04-20] A-cleanup 合集（A 组收尾）
+
+  
 
 本合集的 6 个子项在 Phase 4b A 组 A-cleanup 阶段及后续 hotfix 中处理完毕。A 组结束后关闭。
 
+  
+
 ### 子项 1：画布连线无法按 Delete 键删除 ✅
 
+  
+
 **状态**：A-cleanup 阶段二完成（commit `fb69192`）
+
 **补充**：HF-1（commit `a807c42`）扩展工具栏垃圾桶按钮也支持删 edge（原提示词 scope 遗漏）
+
 **补充**：hotfix-3 修复 onEdgeClick 从未注册导致的"选中 edge 时 selectedNode 未清、Delete 误删节点"Phase 4a 遗留 bug
+
+  
 
 ### 子项 2：刷新后 viewport 不恢复，节点在视口外 ✅
 
+  
+
 **状态**：A-cleanup 阶段三完成（commit `393340a`）
+
 **方案**：A+B 结合 —— partialize 白名单加入 viewport（持久化）+ mount 时 useRef 闸门单次调用（fitView 兜底）
+
+  
 
 ### 子项 3：dev server 多实例规范性问题 ⏸
 
+  
+
 **状态**：代码侧无改动，文档侧未完成。挂独立 backlog 条目 "dev server 启动流程规范化写入 qa-scripts.md"（见下方新条目）
+
+  
 
 ### 子项 4：vite.config.ts.timestamp-*.mjs 临时文件泄漏 ✅
 
+  
+
 **状态**：A-cleanup 阶段一完成（commit `8ff7808`）
+
 **方案**：frontend/.gitignore 加规则
+
+  
 
 ### 子项 5：A-3c 错误态未做浏览器 integration 验证 ⏸
 
+  
+
 **状态**：未做，挂独立 backlog 条目 "A-3c 错误态浏览器验证"（见下方新条目）
+
+  
 
 ### 子项 6：反向拖线从 target handle 出发会刷 React Flow Error #008 ✅
 
+  
+
 **状态**：A-cleanup 阶段四完成（commit `97cd0d2`）
+
 **方案**：方向 A，加 `isValidConnection` prop 到 ReactFlow 组件
+
 **附加发现**：React Flow v12 的"反向拖线自动交换 source/target"是 UX 改进，用户确认接受
+
+  
 
 ### A-cleanup hotfix 系列（2026-04-20）
 
+  
+
 A-cleanup 主交付后用户浏览器验证连续发现 5 个"新功能依赖的旧状态管理缺陷"bug，以独立 commit 修复：
 
+  
+
 - **HF-1**（commit `a807c42`）：工具栏垃圾桶按钮支持 edge 删除
+
 - **HF-2**（commit `0f6481c`）：全局 hotkey 改 window 级监听 + input/textarea guard
+
 - **hotfix-2**：Ctrl+S 在 input 内阻止浏览器"另存为网页"（guard 逻辑顺序修正）
+
 - **hotfix-3**：点击 edge 时清 selectedNode（onEdgeClick 从未注册，Phase 4a 遗留）
+
 - **hotfix-4**（commit `9892b25`）：刷新后 seed history baseline（history 栈不持久化导致首次 undo 失败）
+
+  
 
 **重要沉淀**：4 轮 hotfix 的共同根因是"新功能依赖的旧状态管理有缺陷"。详见 kickoff-log 章节 16。
 
+  
+
 **经验条目**：新功能的 QA 必须走到"依赖的旧状态机制"的边界验证，不能只看新功能自身。
+
+  
 
 ## [P2] 展开态子画布视觉质量提升（流水线布局 + 直角折线）
 
+  
+
 **触发时机**：A-5 完成后的 A-cleanup，或 B/E 组结束后评估是否并入"结构图导出"feature（见下方"依赖决策"）。
 
+  
+
 **现状**：
+
 A-3c + A-3c-hotfix 实现了展开态子画布的基本渲染（React Flow 默认风格节点 + 贝塞尔曲线）。用户浏览器验证时反馈视觉上"有点怪"：
+
 - 子节点位置重叠（根因：schema.json 原始 position 纵向密集，机械 `(x,y) → (y,x)` 转置后横向分布不均匀）
+
 - 连线互相交叉 / 穿过节点
+
 - 整体不如论文结构图（如 YOLOv11 的 C3K2 图）清晰
 
+  
+
 **对比目标**：论文风格结构图，特征：
+
 - 模块用色块区分类型（Conv/Split/C3K/Contact 等各自颜色）
+
 - 直角折线连接（不是贝塞尔）
+
 - 严格的流水线分层（x 坐标分 0/1/2/3... 阶段，每阶段 y 对齐）
+
 - 节点间距规整、不重叠
+
+  
 
 **两条候选路径**：
 
+  
+
 **路径 A（平台内嵌）**：改 A-3c 的 SubGraphView
+
 - 引入 dagre 或 elk.js 自动布局
+
 - 重写 ChildAtomicNode 样式（去掉端口圆点、加类型色块、改字号）
+
 - SubEdgeLine 改为直角折线算法
+
 - 模块类型到颜色的映射表（14 个复合 + 23 个原子模块）
+
 - 成本：2-4 小时
 
+  
+
 **路径 B（独立工具）**：新开"结构图导出"feature
+
 - 生成 Mermaid / PlantUML / dot 文件，用户可以嵌进论文
+
 - 独立 feature，不依赖展开态视觉
+
 - 成本：2-3 天工作量
+
 - 更适合论文级别使用场景
 
+  
+
 **依赖决策（用户待拍板）**：
+
 A 还是 B？两条路径差异很大，不应同时投入。B 更适合论文场景但工作量大；A 成本低但平台视觉风格会分裂（展开态变"论文图"其他地方还是"交互式编辑器"）。
+
+  
 
 **建议决策时机**：B/E 组结束后再判断。那时 YAML 导入导出能力已有，"结构图导出"是否值得投入会更清楚。
 
+  
+
 ## [P2] Phase 4a schema 坐标标注规范统一
 
+  
+
 **背景**：
+
 Phase 4a 的 14 个复合模块 schema.json 里 sub_nodes 的 position 用了纵向布局（所有节点 x≈100，y 递增）。这导致 A-3c 需要在 SubGraphView 里做 `(x,y) → (y,x)` 运行时转置才能在横向画布上正确显示。
+
+  
 
 转置是运行时纠偏，不是根治。schema 的 source of truth 和视觉呈现不一致，未来新标 schema（如 custom 模块）如果用横向布局，A-3c 的转置反而会搞反。
 
+  
+
 **修法候选**：
+
 - 方向 1：统一把 14 个 schema.json 的 position 改为横向布局（所有 x 递增，y≈100 左右），去掉 A-3c 的运行时转置
+
 - 方向 2：在 schema.json 里加 `layout_direction: "horizontal" | "vertical"` 字段，前端根据字段决定是否转置
+
 - 方向 3：留着不改，把"纵向布局 + 运行时转置"固化为约定（在文档里写明，custom 模块也要遵循）
 
+  
+
 **触发时机**：
+
 - Phase 5 开工 gate 顺手做（和"领域模型命名规范"同批次讨论 schema 规范）
+
 - 或 D 组（封装/解封装）开工前（封装新模块时用户会手动标坐标，此时必须定规则）
 
+  
+
 **预估成本**：
+
 - 方向 1：1-2 小时（14 个 schema × 平均 8 个 sub_nodes，手动重标）
+
 - 方向 2：30 分钟（加字段 + 改 SubGraphView 的转置条件）
+
 - 方向 3：10 分钟（只写文档）
 
+  
+
 **与 "展开态视觉提升" 的关系**：
+
 如果采纳"展开态视觉提升（路径 A）"引入自动布局库，schema 里的 position 就变成"用户意图提示"而不是"精确坐标"，本条 backlog 的紧迫性降低。建议两条一起决策。
+
+  
 
 ## [P3] 后端开发环境启动机制混乱
 
+  
+
 **现状**：
+
 Phase 4b 开发过程中反复出现"代码已改、后端 API 返回旧结构"的症状。深入调查发现三层问题叠加：
 
+  
+
 1. **启动脚本环境不一致**：
-   - `setup_conda.ps1` 创建 conda 环境 `defect-detection` 并在其中装依赖
-   - `start_dev.ps1` 启动后端时用 `backend/venv/Scripts/Activate.ps1`（走 venv 路径），不走 conda
-   - 如果用户误用 `start_dev.ps1`，后端跑的是 venv 的 Python，与 conda 环境脱节
-   - 结果：conda 环境里的最新代码改动，在 venv 启动的进程里看不到
+
+   - `setup_conda.ps1` 创建 conda 环境 `defect-detection` 并在其中装依赖
+
+   - `start_dev.ps1` 启动后端时用 `backend/venv/Scripts/Activate.ps1`（走 venv 路径），不走 conda
+
+   - 如果用户误用 `start_dev.ps1`，后端跑的是 venv 的 Python，与 conda 环境脱节
+
+   - 结果：conda 环境里的最新代码改动，在 venv 启动的进程里看不到
+
+  
 
 2. **后端进程在独立窗口运行（看不到日志）**：
-   - `start_dev.ps1` 用 `Start-Process powershell -ArgumentList "-NoExit"` 另开窗口跑 uvicorn
-   - 主终端看不到后端状态，难以感知"没重启"这件事
-   - 如果那个窗口被误关，后端可能以异常状态残留
+
+   - `start_dev.ps1` 用 `Start-Process powershell -ArgumentList "-NoExit"` 另开窗口跑 uvicorn
+
+   - 主终端看不到后端状态，难以感知"没重启"这件事
+
+   - 如果那个窗口被误关，后端可能以异常状态残留
+
+  
 
 3. **uvicorn --reload 在 Windows 下可靠性差**：
-   - Python 的 --reload 依赖文件系统事件
-   - Windows 下某些文件写入方式（特别是"写临时文件+rename"的原子替换）可能不触发事件
-   - Claude Code 的 `str_replace` / `create_file` 工具写文件时 uvicorn 可能收不到通知
+
+   - Python 的 --reload 依赖文件系统事件
+
+   - Windows 下某些文件写入方式（特别是"写临时文件+rename"的原子替换）可能不触发事件
+
+   - Claude Code 的 `str_replace` / `create_file` 工具写文件时 uvicorn 可能收不到通知
+
+  
 
 **影响**：每次后端代码改动后开发者不知道是不是真的生效，多次浪费时间排查"看起来是前端 bug 实际是后端没重载"。
 
+  
+
 **触发修复时机**：Phase 5 开始之前（Phase 5 大量改后端代码，累积时间成本不可控）。
 
+  
+
 **修法候选**：
+
 - 方向 A（推荐）：统一到 conda 环境，修改 `start_dev.ps1` 的 `Start-Backend` 走 `conda activate defect-detection` 而不是 venv；删除 venv 创建逻辑。另提供一个"前台启动后端"选项（不要 Start-Process 另开窗口），让日志在主终端可见
+
 - 方向 B：保留 venv 路径但和 conda 二选一，让脚本有 `-Env conda|venv` 参数
+
 - 方向 C：引入 watchfiles 或 watchdog 替代 uvicorn 默认 reloader
+
+  
 
 **预估成本**：方向 A 约 1-2 小时（改脚本 + 文档 + 验证）。
 
+  
+
 **开发流程临时规范**（在修复之前）：
+
 - 每次涉及后端代码改动的 Claude Code 会话完成后，用户**手动重启后端**：`taskkill /PID <后端PID> /F` + `conda activate defect-detection` + `cd backend && python -m uvicorn app.main:app --reload`
+
 - 不要用 `start_dev.ps1` 启动后端（临时）
+
 - 这条临时规范写进 docs/qa-scripts.md
+
+  
 
 ## [P3] 模块详情 API 缓存粒度
 
+  
+
 **背景**：
+
 INV-01 报告观察到：前端每次拖拽一个模块到画布就调一次 `GET /models/modules/{type}` 详情 API。如果用户拖 3 个 Conv2d，就请求 3 次同样的数据。
+
+  
 
 A-3c 已经用 `moduleSchemas` store 缓存避免了重复请求，但那是展开态懒加载的场景。拖拽时模块库的 `ModuleLibrary.tsx` 是否走同样的缓存，需要核实。
 
+  
+
 **触发修复**：A 组收尾时或下次修 ModuleLibrary.tsx 时顺手看。
+
+  
 
 **修法**：如果 ModuleLibrary 也走 `moduleSchemas` 缓存就收敛；否则考虑把 `moduleSchemas` 的 action 抽到更上层（或提供一个公共 `useModuleSchema(type)` hook）。
 
+  
+
 **预估成本**：30 分钟 - 1 小时。
+
+  
 
 ## [P3] React Router v7 迁移预警
 
+  
+
 **背景**：
+
 Console 持续出现两条 React Router v6.x 的 Future Flag Warning：
+
 - `v7_startTransition` 未开启
+
 - `v7_relativeSplatPath` 未开启
+
+  
 
 这是 React Router v7 迁移的提前预警，不是 bug。可以通过设置 future flags 立即静音，也可以等真升级 v7 时再处理。
 
+  
+
 **触发修复**：
+
 - 短期（静音）：5 分钟，加两行 router 配置
+
 - 长期（真升级）：React Router v7 发布后评估，1-2 小时
+
+  
 
 **预估成本**：见上。
 
+  
+
 ## [P3] React Flow 动态 Handle 必须显式调用 updateNodeInternals（知识点）
 
+  
+
 **背景**：
+
 Phase 4b A-3b-hotfix 发现：React Flow v12 的 `nodeInternals` 测量系统不会自动响应 Handle 数量的运行时变化。动态端口机制（concat 的 `input_ports_dynamic: true`）在 A-3b-fix 里数据层已经完全正确工作（useNodeConnections 返回实时连接数、computeDynamicPorts 正确扩展端口数组），但 React Flow 画布上仍只显示初始端口数量，导致连线命中测试失败。
+
+  
 
 **已修复方式**：用 `useUpdateNodeInternals` hook 在端口数量变化时显式触发重新测量。
 
+  
+
 **性质**：非待办，是经验条目。保留作为**未来所有涉及动态 Handle 场景的检查清单**：
+
 - 复合节点展开态渲染子 Handle 时（A-3c 用了普通 div 规避了此问题）
+
 - 节点根据某个 prop 切换端口数量时
+
 - 自定义节点有任何运行时端口变化时
+
+  
 
 **伴生教训**：React Flow 的运行时测量系统属于**单元测试盲区**，jsdom 环境不运行 measureNode。未来所有 React Flow 相关提示词必须在验收剧本里声明"需要浏览器手动验证"。
 
+  
+
 ## [已取消 · 2026-04-20] Phase 4b A-5 跨层级拖拽
 
+  
+
 **原设想**：
+
 - 方向 1：从外部拖节点进入展开容器，parentId 更新
+
 - 方向 2：从容器内拖子节点到外部，外部连线重接或断开
 
+  
+
 **取消理由**：
+
 1. **产品等价**：用户重新表述的需求（拖拽连线自定义复合结构 + 管理员权限 + I/O 检查）等价于 D.1 "封装为新复合模块"，无需另开 A-5 任务
+
 2. **技术被堵死**：A-3c 把子画布做成 `pointer-events-none` 博物馆玻璃罩，方向 2（从子画布拖出）事实上不可能；原始 A-5 依赖的 parentId 路径在 A-3c 选 α（普通 DOM + 绝对定位）时也被同步排除
+
 3. **代码状态干净**：A-5-recon 确认 `ModelCanvas` 从未注册 `onNodeDragStop` 等 drag 钩子，`nestedNodes.ts` 自 A-1 起为 dead code，取消无需 rollback
+
+  
 
 **产品需求加固（转入 D.1）**：见下方"D.1 产品需求加固"条目
 
+  
+
 **证据来源**：`docs/private/A-5-recon-report.md`
 
+  
+
 ---
+
+  
 
 ## [P3 · 触发时机：D 组开工前] `nestedNodes.ts` 去向评估
 
+  
+
 **背景**：
+
 `frontend/src/utils/modelBuilder/nestedNodes.ts` 提供 `flattenNodes` / `nestNodes` 纯函数，A-1 建立时预期 A-5 会用到。A-5-recon 确认截至 A-4 无任何生产代码 import（仅测试文件引用），是 dead code。A-5 已取消后该工具失去原定消费者。
 
+  
+
 **去向候选**：
+
 - α：保留。D.1 封装逻辑如需处理选中节点之间的父子结构，`flattenNodes` 可能借得上
+
 - β：删除工具 + 对应测试。D.1 如纯粹"选中 → 生成 schema → 保存"不经过层级计算
+
+  
 
 **触发时机**：D 组开工前（起草 D.1 提示词时根据 D.1 实现细节决定）
 
+  
+
 **预估成本**：β 约 5 分钟；α 如需改造约 30 分钟
 
+  
+
 ---
+
+  
 
 ## [加固 · 合并入 D.1 · 触发时机：D 组开工] D.1 "封装为新复合模块" 产品需求加固
 
+  
+
 **背景**：
+
 A-5 取消过程中用户重新确认 D.1 的完整产品形态，在原 Phase 4b 交接文档 D.1 描述之外补充两项硬约束。
 
+  
+
 **加固项**：
+
 1. **管理员权限**：非管理员用户不能创建新复合模块。后端 API 鉴权（`POST /models/encapsulate`）+ 前端菜单按用户角色隐藏
+
 2. **输入输出检查**：保存前校验
-   - `proxy_inputs` / `proxy_outputs` 指定的 `sub_node_id` 确实在选中节点集合内
-   - 端口索引 `port_index` 在对应子节点的 schema 端口范围内
-   - 选中节点之间的 `sub_edges` 构成 DAG（无环）
+
+   - `proxy_inputs` / `proxy_outputs` 指定的 `sub_node_id` 确实在选中节点集合内
+
+   - 端口索引 `port_index` 在对应子节点的 schema 端口范围内
+
+   - 选中节点之间的 `sub_edges` 构成 DAG（无环）
+
+  
 
 **触发时机**：D 组（封装/解封装）正式开工时一并实施，不单独立项
 
+  
+
 ## [P3 · 触发时机：参数面板下次重度改动时] 受控 input 的 Ctrl+Z 行为不一致
 
+  
+
 **现象**：
+
 参数面板的 number input（如 in_channels、out_channels 等）内进行"全选 + Delete + 输入新值"的编辑序列后，按 Ctrl+Z 可能出现部分撤销的中间态（如输入框显示 `064` 且 `64` 仍选中），而不是清晰回到编辑前的值。
 
+  
+
 **根因**：
+
 React 受控组件的 `value` 由 state 管理，浏览器 input 的原生 undo 栈操作 DOM，两者脱节。这是 React + controlled input 的固有行为，不是项目代码 bug。
 
+  
+
 **影响范围**：
+
 所有 React 受控 input，不限于参数面板。但参数面板是用户最可能触发这种编辑序列的地方。
 
+  
+
 **修法候选**：
+
 - 方向 α：参数面板维护自己的 undo 栈，接管 Ctrl+Z 在 input 内的行为（`event.preventDefault()` + 自定义 undo）
+
 - 方向 β：把参数面板的每次修改纳入全局 zustand history 栈（通过 `saveHistory` 在 onBlur 时触发）
+
 - 方向 γ：不修，写进用户文档说明"参数编辑请用拖选+输入直接覆盖"
 
+  
+
 **触发时机**：
+
 参数面板下次重度改动时（如 Phase 4b 参数校验增强、或 C 组模型验证返回的参数面板实时推算功能开工时）一并处理。单独为此修改不值得。
+
+  
 
 **发现来源**：Phase 4b A-cleanup-hotfix 浏览器验证阶段，2026-04-20
 
+  
+
 ## [已落地 · 2026-04-20] 论文源码私有化目录
+
+  
 
 **位置**：`backend/app/ml/paper_reference/`
 
+  
+
 **目录结构**：
+
 - `ultralytics/` — 魔改版 YOLOv11，含论文三模块（PMSFA / FocusFeature / Detect_SASD），用于 Phase 5 模型训练、Phase 6 模型测试、B 组等价性测试
+
 - `ultralytics-yolo11-20251219/` — 纯净 YOLOv11 基线，用于 Phase 7 剪枝、Phase 8 蒸馏（因剪枝蒸馏需在 YOLO 源码上加文件改东西，单独留一份干净基线）
+
 - 其他工具脚本：`get_FPS.py` / `get_model_erf.py` / `heatmap.py` / `plot_channel_image.py` / `plot_result.py` / `track.py` / `train.py` / `transform_PGI.py` / `transform_weight.py`
+
 - `README.md` — 占位 + 目录用途说明（白名单保留，非私有）
+
+  
 
 **gitignore 规则**：整体 `backend/app/ml/paper_reference/**` 忽略，白名单放行 `!backend/app/ml/paper_reference/README.md`
 
+  
+
 **用途**：
+
 - B 组代码生成的等价性测试（PMSFA / FocusFeature / Detect_SASD 三模块的 shape & 数值对比）走**魔改版**（`ultralytics/`）
+
 - Phase 7 剪枝 / Phase 8 蒸馏走**纯净基线**（`ultralytics-yolo11-20251219/`）
+
 - 学术追溯：论文核心贡献的"source of truth"参考基线
+
+  
 
 **关键产品决策**：平台 composite 模块 = 对外 source of truth（已经过等价性测试对齐论文）；论文原版 = 私有保留，仅用于校验。GitHub 开源时其他人不需要论文源码即可使用平台；需要原生 YOLO11 基线时从 Ultralytics 官方获取。
 
+  
+
 ---
+
+  
 
 ## [E 组前置 · 触发时机：E 组开工前（可在 B 组期间提前补 1-2 个）] YOLO11 原生模块补齐
 
+  
+
 **背景**：
+
 用户论文以 YOLOv11 为基线进行改进（Phase 5-8 均基于 YOLOv11 结构）。Phase 4b 任务组 E（YAML 导入导出）要支持导入 yolo11.yaml 基线作为起点，但 Phase 4a 实现的 14 个 composite 模块**不包含 YOLO11 原生模块**，需要补齐。
+
+  
 
 **缺失模块清单**（对照 yolo11.yaml）：
 
+  
+
 | 模块 | 类型 | 用途 |
+
 |---|---|---|
+
 | `Conv`（ultralytics 版） | composite | Conv + BN + SiLU，YOLO 通用基本块（区别于已有 `Conv_GN`） |
+
 | `C3k2` | composite | YOLO11 引入的新 block |
+
 | `SPPF` | composite | Spatial Pyramid Pooling Fast（YOLOv5+） |
+
 | `C2PSA` | composite | YOLO11 特有 PSA 注意力 block |
+
 | `Detect`（ultralytics 版） | composite | YOLO 原生检测头（区别于项目的 `Detect_SASD`） |
+
+  
 
 **已有可复用**：`Concat`（原子模块）、`nn.Upsample`（需确认注册名）
 
+  
+
 **技术路径**：路径 α（平台内重新实现，用户 2026-04-20 决策）
+
 - 按 ultralytics 源码在项目的 composite 模块体系内重建 schema.json + module.py
+
 - 每个模块走 Phase 4a 已建立的"论文模块"标准流程（schema.json + module.py + 等价性测试）
+
 - 优点：学术追溯一致、用户可展开查看内部、不依赖 ultralytics 作为运行时依赖
+
 - 放弃路径 β（ultralytics passthrough）：会打破"学术追溯"产品主线，用户明确拒绝
 
+  
+
 **触发时机策略**：
+
 - **B 组期间可提前补 1-2 个**：B 组代码生成的等价性测试需要样本，补一个如 `C3k2` 作为测试 case 扩展覆盖
+
 - **E 组开工前必须全部补齐**：yolo11.yaml 导入依赖这些模块全部已注册
 
+  
+
 **预估成本**：
+
 - 每个 composite 模块约 1-2 小时（schema 标注 + module.py + 等价性测试）
+
 - 5 个模块 ≈ 6-10 小时
+
 - 可分散在 B/C/D 组期间完成
+
+  
 
 **基线画布落地**：本任务完成后，yolo11 基线画布 = "E 组导入功能加载 yolo11.yaml"，**不是额外独立 feature**
 
+  
+
 ---
+
+  
 
 ## [Phase 4d · 触发时机：Phase 4d 开工] 模块代码浏览器页面
 
+  
+
 **背景**：
+
 用户希望在平台内查看 composite 模块的 Python 源码，方便审查实现质量。独立 feature，归入 Phase 4d（模板管理 + 自定义模块）。
 
+  
+
 **产品定位**：
+
 - **只读代码浏览器**，不是编辑器
+
 - 数据源：`backend/app/ml/modules/composite/*/module.py`（用户 2026-04-20 决策为数据源 (a)）
+
 - **关键副作用**：论文源码从公共代码解耦——GitHub 开源项目时浏览器只展示 composite 实现，论文源码保持私有
 
+  
+
 **UI 设计要点**：
+
 - 独立页面（不在模型构建页面内）
+
 - 左侧：模块名目录树（按类别分组：backbone / neck / head / attention / paper / 其他）
+
 - 右侧：选中模块 → 展开查看源码
+
 - 源码高亮（Monaco Editor 或 shiki）
+
 - AST 分块标注（class 定义 / forward 方法 / `__init__` 等）
+
 - 权限：管理员可见；普通用户视角需要单独决策
 
+  
+
 **实现方向（未定）**：
+
 - 方向 A：后端 API `GET /models/modules/{type}/source` 返回文件纯文本 + AST 元数据，前端用 Monaco 渲染
+
 - 方向 B：完全前端实现（vite `import.meta.glob` 把模块代码作为 raw text 打包），但需要和 Vite 配置协调
+
 - 方向 C：后端 API 返回文本，前端用 shiki 高亮（轻量替代 Monaco）
 
+  
+
 **扩展空间**：
+
 - 未来可扩展数据源到 (b) 论文源码、(c) ultralytics 源码，但权限需要更严格
+
 - 可加搜索 / 批注功能
+
+  
 
 **触发时机**：Phase 4d 开工
 
+  
+
 **预估成本**：2-3 天（含后端 API、前端组件、权限、AST 解析、高亮集成）
 
+  
+
 ---
+
+  
 
 ## [P3 · 触发时机：Phase 5 开工前] dev server 启动流程规范化写入 qa-scripts.md
 
+  
+
 **背景**：
+
 A-cleanup 子项 3 原计划挂入 `docs/qa-scripts.md`，但 A-cleanup 阶段只处理了代码子项（1/2/4/6），文档子项未完成。
 
+  
+
 **内容**：
+
 - 启动 dev server 前检查 5173 占用（`netstat -ano | findstr :5173`）
+
 - Claude Code 启动后立即 Ctrl+C 关闭，避免和用户启动的 dev server 串线
+
 - 清理残留 vite 进程的命令
+
+  
 
 **触发时机**：Phase 5 开工前一并写入 qa-scripts.md
 
+  
+
 **预估成本**：15 分钟写文档
 
+  
+
 ---
+
+  
 
 ## [P3 · 触发时机：A-3c 下次修改时或 Phase 5 开工前] A-3c 错误态浏览器验证
 
+  
+
 **背景**：
+
 A-3c 的展开态"加载失败 + 重试"路径只做了单元测试覆盖（mock store 返回 error），未做浏览器 DevTools Network Offline 场景的真实验证。代码路径全对但未实地验过。
 
+  
+
 **验证动作**：
+
 - 浏览器 DevTools Network 设 Offline
+
 - 展开一个新 composite 节点（未加载过 schema）
+
 - 看到加载失败 UI + 重试按钮
+
 - 恢复网络 + 点重试 → 正常加载
+
+  
 
 **触发时机**：A-3c 下次修改时顺手验证；或 Phase 5 开工前统一扫尾
 
+  
+
 **预估成本**：5 分钟验证；如发现 bug 视情况
+
+  
 
 ## [Phase 4d · 触发时机：Phase 4d 开工 OR B 组 MVP 交付后] 模块库扩展：用户上传自定义模块代码
 
+  
+
 **背景**：
+
 用户 2026-04-21 提出希望能"自己输入代码注册一个新的原子或模块"，验证后归并到模块库页面扩展方向（而非独立的"模型配置页面"）。
 
+  
+
 **产品形态**：
+
 - 模块库（ModuleLibrary 组件）右上角加"注册新模块"按钮
+
 - 弹窗含：模块名、is_composite 开关、schema_json 编辑器、Python 代码粘贴区
+
 - 后端验证代码合法性（ast.parse 通过 + import 白名单 + 无副作用）后写入 ModuleDefinition 表
+
 - 代码文件落地到 `backend/app/ml/runtime/extra_modules/user_uploaded/` 独立子目录
+
+  
 
 **关联**：Phase 4d 模板管理 + 自定义模块功能；和 B-2 的 generate_module_code 产出共用 extra_modules/ 目录
 
+  
+
 **触发时机**：Phase 4d 开工；或 B 组 MVP 交付后用户实际有"先上传自定义模块再用"需求时提前
+
+  
 
 **预估成本**：3-5 天（含代码合法性校验）
 
+  
+  
 
 ## [B 组 · 触发时机：B 组 MVP 交付后评估] B-3/5/6 Architecture 部分节奏决定
 
+  
+
 **背景**：
+
 G5 决策 MVP 只做 B-0/B-1/B-2/B-4（Module 交付路径）。Architecture 部分（yaml 导出 + 加载测试 + UI）延后评估。
 
+  
+
 **待评估的事**：
+
 1. Module MVP 实际使用中是否暴露新需求导致 B-3/5/6 scope 再调整
+
 2. B-3（Architecture YAML 生成器）是否合并入 E 组 "yaml 导入导出"任务一起做
+
 3. B-5（YAML 加载测试）的容差策略（是否要做数值等价、还是只验证加载成功）
+
 4. B-6（UI）的 Module/Architecture 生成按钮是分开还是合并
+
+  
 
 **触发时机**：B-0/1/2/4 完成后、进入 B-后半前
 
+  
+
 **预估成本**：待评估决定
 
+  
+  
 
 ## [遗留清理 · 触发时机：Phase 5 开工前 OR 代码审查时顺手] 遗留 ORM 表清理
 
+  
+
 **背景**：
+
 B-1 + B-1c 侦察发现两张遗留表**无任何代码引用**：
+
 - `backend/app/models/model_config.py` 的 `ModelConfig` 类（被 `ml_module.ModelBuilderConfig` 替代）
+
 - `backend/app/models/ml_module.py:14` 的 `MLModule` 类（被 `ModuleDefinition` 替代）
+
 - `backend/app/db/seeds/ml_modules_seed.py` 的旧种子数据（含 num_layers 等已废弃字段）
 
+  
+
 **清理动作**：
+
 - 确认无代码依赖（grep 全项目）
+
 - 删除 ORM 文件
+
 - 生成 Alembic migration 删除对应数据库表
+
 - 删除 seed 文件
+
+  
 
 **风险**：可能有文档或未来计划依赖这些表；需要和 SQL migration 历史协调
 
+  
+
 **触发时机**：Phase 5 开工前清理（避免训练系统引入新的陈旧表引用）；或代码审查时顺手做
+
+  
 
 **预估成本**：2-4 小时（含 migration 验证）
 
+  
+  
 
 ## [B-0 · 触发时机：B-0 施工中] Module 画布旧数据向后兼容
 
+  
+
 **背景**：
+
 B-0 引入 `mode` 字段后，现有保存的 ModelBuilderConfig 记录没有 mode 字段。B-0 需要向后兼容——旧数据默认按 architecture 处理。
 
+  
+
 **需要做**：
+
 - 前端：加载旧 config 时若 metadata.mode 不存在，默认 'architecture'
+
 - 后端：Pydantic schema 的 mode 字段设 Optional 默认值 'architecture'
+
+  
 
 **触发时机**：B-0 施工时内联处理
 
+  
+
 **预估成本**：30 分钟（在 B-0 提示词里作为硬约束写入）
+
+  
 
 ## [B-1 · 触发时机：B-1 起草时] 保存对话框分模式渲染
 
+  
+
 **背景**：
+
 B-0 完成后浏览器验证发现当前保存对话框对 Module 和 Architecture 不区分。按 G4=β 决策，Module 画布保存应写入 ModuleDefinition 表（注册为可用模块），Architecture 画布保存写入 ModelBuilderConfig 表（当前行为）。
 
+  
+
 **需要做**（归入 B-1 前端分支，非独立条目）：
+
 - 保存对话框读取 store.mode
+
 - Module 模式：标题"注册为新模块"+ 字段 moduleName/displayName/category/description
+
 - Architecture 模式：标题"保存模型配置"+ 字段保持当前
+
 - 调用分支：Module → `POST /api/v1/models/modules`（B-1 后端产出）；Architecture → `POST /api/v1/model-configs`（保持）
+
+  
 
 **触发时机**：B-1 开工时一起做，不单独立条目
 
+  
+
 **产生背景**：B-0 浏览器验证阶段识别，避免"前端先改后端后补"造成虚假就绪
+
+  
 
 ## [基建 · 已落地 · 2026-04-21] 提示词模板 v1
 
+  
+
 **位置**：`docs/private/prompt-template.md`
+
+  
 
 **内容**：整合 A-1 + hotfix-3/4 + B-0-HF1 经验的统一提示词模板，12 章节结构，适配侦察/施工/hotfix/文档四类任务
 
+  
+
 **触发改进**：每次 B-1/B-2/B-3... 使用时发现模板漏项，迭代版本号（v2 / v3...）并在 kickoff-log 记录
+
+  
 
 **成本**：0（本轮已落地）
 
+  
+
 ## [P3 · 触发时机：代码审查时统一回归 / 或 Phase 5 训练 API 引入鉴权时一起改] inline admin 检查回归到 Depends 风格
+
+  
 
 **背景**：B-1 因 FastAPI 闭包参数 override 在 pytest 中的局限，POST /modules endpoint 采用 `Depends(get_current_user)` + inline `if role != "admin"` 而非 `Depends(require_admin)`。鉴权语义等价但和项目其他 endpoint 风格不一致。
 
+  
+
 **触发**：Phase 5 训练 API 引入鉴权时统一审视，或代码审查发现风格偏移时
+
+  
 
 **预估成本**：1-2h（修 fixture override 写法 + 改 endpoint 依赖声明）
 
+  
+  
 
 ## [P3 · 触发时机：模块库 UX 优化批次] ModuleLibrary 暴露刷新 API 替代 key 重新挂载
 
+  
+
 **背景**：B-1 注册新模块后用 `key={moduleRefreshKey}` 触发 ModuleLibrary 重新挂载来刷新列表。副作用：丢失搜索框输入、展开折叠状态、滚动位置。
+
+  
 
 **改进方向**：ModuleLibrary 用 forwardRef + useImperativeHandle 暴露 reload() 方法，或迁移到 zustand 全局 store
 
+  
+
 **触发**：用户实际使用中反馈"注册后搜索状态丢失"等问题；或 D 组（节点交互优化）开工
+
+  
 
 **预估成本**：2-3h
 
+  
+  
 
 ## [P3 · 触发时机：Phase 5 开工前 OR 后端测试套件清理批次] backend test_augmentation.py CreateJobRequest 导入失败
 
+  
+
 **背景**：B-1 阶段零侦察发现 `backend/tests/test_augmentation.py` 因 `CreateJobRequest` 导入失败而无法收集，属于 B-1 之前的遗留问题。
+
+  
 
 **影响**：后端测试套件不干净，"哪些失败是新引入的哪些是历史遗留"的判断成本累加
 
+  
+
 **触发**：Phase 5 训练 API 涉及 augmentation job 时一起处理；或后端测试套件统一清理批次
+
+  
 
 **预估成本**：1-2h（找到 CreateJobRequest 应在哪定义 + 修 import）
 
+  
+
 ## [P3 · 触发时机：dynamic_builder 改动批次或 Phase 5 训练对接时] sub_edges 缺 id 字段
+
+  
 
 **背景**：B-1 hotfix-3 诊断时发现 canvas_to_schema 写入的 sub_edges 是 `{source, source_port, target, target_port}` 结构，**缺 id 字段**。当前 dynamic_builder 按 source/target 索引消费不需要 id，但未来 sub_edges 级精细操作（如错误定位、序列化往返）会缺 id 而难追溯。
 
+  
+
 **触发**：dynamic_builder 改动批次；或 Phase 5 训练时序列化 sub_edges 出现追溯需求
+
+  
 
 **预估成本**：30 分钟（converter 加 id 生成 + 1 条测试）
 
+  
+
 ## [中优先 · 触发时机：B-后半 OR Module 画布功能扩展批次] Module 画布支持子节点参数提升为对外参数
 
+  
+
 **背景**：
+
 B-1 浏览器验证（2026-04-21）发现：用户在 Architecture 画布点击 Module 节点（如 AnotherTest）时，参数面板显示"此模块没有可配置参数"。
+
+  
 
 **根因**：B-1 注册 Module 时 `params_schema: []` 写死，MVP 不支持用户在画布上声明对外参数。但用户体感是 "我的 block 内部 Conv2d 应该能调 in_channels 才对"。
 
+  
+
 **产品形态需求**：
+
 - Module 画布上应能选中某个内部子节点的某个参数
+
 - 标记该参数为"对外暴露"，给一个对外参数名（如 `out_channels` → 暴露为 `c_out`）
+
 - 注册时 params_schema 自动生成
+
 - 支持 `${...}` 表达式（如多个子节点共用同一对外参数）
+
+  
 
 **触发时机**：B 组后半（Architecture YAML + UI 完整化）或 Module 画布功能扩展批次
 
+  
+
 **预估成本**：1-2 天（前端 UI + 后端 schema 同步 + 测试）
+
+  
 
 **关联**：和 B-2 代码生成器有交集——生成器需要把对外参数正确传递到子节点的 forward 调用
 
+  
+
 ---
+
+  
 
 ## [P3 · 触发时机：用户登录态相关问题修复批次] 后端重启后前端登录态失效缺乏明确提示
 
+  
+
 **背景**：B-1-hotfix-3 验证时遇到——后端重启后 SQLite 数据库重建，旧 token 失效。前端 `/api/v1/auth/me` 返回 401，但**没有自动跳转到登录页**，主页"看起来登录了"但所有接口都 401。
+
+  
 
 **改进方向**：axios interceptor 检测到 401 → 清 localStorage token → 跳转 /login
 
+  
+
 **触发时机**：用户首次反馈登录态相关问题时；或 Phase 5 引入更多 protected 路由时
+
+  
 
 **预估成本**：1-2 小时
 
+  
+
 ---
+
+  
 
 ## [P3 · 触发时机：开发环境优化批次] Vite 缓存 ERR_CACHE_READ_FAILURE 自愈机制
 
+  
+
 **背景**：B-1-hotfix-3 后用户遇到 Vite 预构建缓存损坏（`node_modules/.vite/deps/*.js` 读取失败），症状是动态 import 失败、整个页面打不开。手动 `Remove-Item -Recurse -Force node_modules\.vite` 后解决。
 
+  
+
 **改进方向**：
+
 - 在 `start_dev.ps1` 启动脚本里加一条"启动前先清 .vite"的可选步骤
+
 - 或在 README/qa-scripts 里写明"打不开页面时优先清 .vite"故障排查流程
+
+  
 
 **触发时机**：开发环境优化批次；或第二次再遇到此问题时
 
+  
+
 **预估成本**：30 分钟（脚本改动 + 文档）
+
+  
 
 明白了，按这个格式重写：
 
+  
+
 ---
+
+  
 
 ## [P2 · 触发时机：B-6 前端代码预览上线前，或用户首次反馈下载的 .py 实例化失败时] codegen 生成类 `__init__` 缺少参数默认值
 
+  
+
 **背景**：
+
 B-2 实现的 `generate_module_code` 在展开 composite 子模块时，未将子模块 `params_schema` 的默认值注入生成类的 `__init__` 签名。例如 Conv_GN 的 `p` / `g` 参数有默认值，但生成的 `__init__(self, p, g)` 不含默认值，用户直接实例化 `Conv_GN()` 会报 `TypeError: missing required positional argument`。
+
+  
 
 B-4 等价性测试中通过测试侧补丁绕过了此问题，未修改生产代码。
 
+  
+
 **修法**：`generate_module_code` 生成 `__init__` 签名时，从 `params_schema` 读取每个参数的 `default` 字段，有默认值的参数生成 `param=default` 格式。
+
+  
 
 **触发时机**：B-6 前端代码预览上线前（用户能看到生成代码时此 bug 明显）；或用户首次反馈复制 .py 后实例化报错时。
 
+  
+
 **预估成本**：1-2 小时（修 codegen.py + 补测试）
 
+  
+
 ---
+
+  
 
 ## [P3 · 触发时机：同上] codegen 生成签名与 `params_schema` 字段对不上
 
+  
+
 **背景**：
+
 部分 composite 模块（如 C2f）的 `params_schema` 含有生成类签名未使用的参数（如 `n`）。`generate_module_code` 未做过滤，生成的 `__init__` 签名会包含实际 forward 里用不到的参数，或反之漏掉。
+
+  
 
 B-4 测试通过 `inspect.signature` 过滤参数绕过了此问题。
 
+  
+
 **修法**：`generate_module_code` 生成 `__init__` 签名时，只纳入在 `sub_nodes` 参数中实际有 `${var}` 引用的变量名，和 `params_schema` 做交集校验，不一致时抛出 `CodegenError` 提示哪个参数未使用。
+
+  
 
 **触发时机**：同 BL-codegen-01，两条一起修。
 
+  
+
 **预估成本**：1-2 小时（和上一条合并处理）
+
+  
 
 ## [P3 · 触发时机：用户首次反馈配置列表混乱时] 保存配置允许重名导致加载列表出现重复条目
 
+  
+
 **背景**：Architecture 画布保存时不校验名称唯一性，用户多次保存同名配置会在加载列表里产生多条重复记录。
+
+  
 
 **修法**：保存前查询同名配置是否已存在，已存在则提示用户"已有同名配置，是否覆盖？"，确认后走更新接口而非新建。
 
+  
+
 **触发时机**：用户首次反馈配置列表混乱时，或 Phase 5 训练页面需要选择配置时（重名会造成选择混乱）。
+
+  
 
 **预估成本**：1-2 小时
 
+  
+
 ---
+
+  
 
 ## [已完成 · 2026-04-27] P5-Hygiene-A: .gitignore 修正 + ORM 文件补录 git
 
+  
+
 **背景**：
+
 根目录 `.gitignore` 的 `models/` 规则（无开头 `/`）为 gitignore "任意层级匹配"语法，误将 `backend/app/models/` 整目录吃掉，导致该目录下所有核心 ORM 文件从未被 git 追踪。P5-Gate 阶段暴露了此问题。
 
+  
+
 **已完成**：
+
 1. `.gitignore` 修正：`models/` → `/models/`（只匹配仓库根目录的 `models/`）
+
 2. 补录 `backend/app/models/` 下全部 11 个未追踪 ORM 文件入 git
+
 3. 阶段零侦察确认 `backend/app/models/` 之外无其他 .gitignore 误匹配问题
 
+  
+
 **侦察方法**：
+
 - `git status --ignored --short` + `git ls-files --others --ignored --exclude-standard` 全项目扫描
+
 - 被忽略文件均为预期范围：`__pycache__/`、`.pytest_cache/`、`app.db`、`backend/app/ml/paper_reference/`、`backend/app/ml/runtime/extra_modules/`（运行时生成）、`logs/` 等
 
+  
+
 **遗留备注**：
+
 - `lib/`、`env/`、`uploads/`、`tmp/`、`temp/` 等规则仍不带 `/`，但阶段零侦察确认项目内部无同名源代码目录，当前无实际误匹配
+
 - 如未来在项目内部创建同名包目录，需同步将这些规则改为 `/lib/`、`/env/` 等
+
+  
 
 **触发时机**：Phase 5 主体开工前（P5-Gate 预热阶段完成）
 
+  
+
 **预估成本**：已落地（约 30 分钟）
 
+  
+  
+  
 
+## [已修复 · 第六任清扫期 C-1 · 2026-04-29] [P0] codegen `_get_init_params` 重写 + B-4 等价性测试重写
 
-## [P0] codegen `_get_init_params` 重写 + B-4 等价性测试重写
+  
 
 **背景**:
+
 P5-S3-Recon-2(2026-04-27)实测发现 B-2 codegen 生成的论文模块类在官方 pip ultralytics 下兼容性差。详细诊断见 `backend/scripts/recon_codegen_signature_report.md`。
 
+  
+
 **三大根因**:
+
 1. codegen `_get_init_params` 按 `sub_nodes` 拓扑序排参数,与 `architecture_to_yaml` 使用的 `params_schema` 顺序不一致 → 参数顺序错位的**静默 bug**(模型构造成功但参数语义全错)
+
 2. codegen 不生成 `params_schema` 中未在 `sub_nodes` 使用的参数 → CSP_PMSFA 缺 `n/shortcut/g` 触发 TypeError
+
 3. **B-4 用 `cls(**filtered)` 关键字参数测试,完全掩盖根因 1+2** — 元问题:测试机制设计错
 
+  
+
 **现状**:
+
 4 个论文代表类(PMSFA/FocusFeature/CSP_PMSFA/Detect_SASD)中只有 PMSFA 1 个能跑通官方 ultralytics 加载。
 
+  
+
 **修法**:
+
 - **任务 1**:修 `backend/app/ml/runtime/codegen.py` 的 `_get_init_params`:
-  - 按 `params_schema` 顺序排参数(不是 sub_nodes 拓扑序)
-  - 包含 schema 全部声明的参数(即使未在 sub_nodes 引用)
-  - 生成参数默认值
+
+  - 按 `params_schema` 顺序排参数(不是 sub_nodes 拓扑序)
+
+  - 包含 schema 全部声明的参数(即使未在 sub_nodes 引用)
+
+  - 生成参数默认值
+
 - **任务 2**:重写 B-4 等价性测试:
-  - 把 `cls(**filtered)` 改为模拟 ultralytics parse_model 的 `cls(*args)` 位置参数调用
-  - 测试改写后,论文 7 个类的等价性测试可能有部分会失败(之前掩盖的 bug 暴露),需逐个排查
+
+  - 把 `cls(**filtered)` 改为模拟 ultralytics parse_model 的 `cls(*args)` 位置参数调用
+
+  - 测试改写后,论文 7 个类的等价性测试可能有部分会失败(之前掩盖的 bug 暴露),需逐个排查
+
+  
 
 **触发修复时机**:**立即**。Phase 5 P5-S3 主体训练实现的前置阻塞任务,必须先修。
 
+  
+
 **预估成本**:
+
 - 任务 1:1-2 天
+
 - 任务 2:0.5-1 天
 
+  
+
 **文件**:
+
 - `backend/app/ml/runtime/codegen.py`
+
 - `backend/tests/` 下 codegen / equivalence 相关测试文件
+
 - 可能需要更新论文 7 个类的 `module.json` schema(确认 params_schema 字段顺序正确)
 
+  
+
 **关联**:
+
 - [P0] 多输入 `f` 列表问题 — 通常一并处理
+
 - 详细诊断:`backend/scripts/recon_codegen_signature_report.md`
+
+**关闭语**:
+
+> **[已修复 · 第六任清扫期 C-1 · 2026-04-29]**
+> 通过 C-1.1 + C-1.2 修复:`_get_init_params` 改按 `params_schema` 顺序提取 + 包含全部 schema 声明参数 + 默认值。B-4 测试改用位置参数 `cls(*args)` 模拟 ultralytics `parse_model` 调用,真覆盖协议层。后续 C-3-A/B 还修了 forward 协议(三路径统一)。详见 commits `db69566` / `dfc1646` / `c824e3d` / `957814c` / `7d36302`。
 
 ---
 
-## [P0] 多输入 `f` 列表问题(FocusFeature / Detect_SASD)
+---
+
+  
+
+## [已修复 · 第六任清扫期 C-2/C-3 · 2026-04-29] [P0] 多输入 `f` 列表问题(FocusFeature / Detect_SASD)
+
+  
 
 **背景**:
+
 P5-S3-Recon-2 发现 `FocusFeature` 和 `Detect_SASD` 在 yaml 中的 `from` 字段是列表(如 `[[10, 6, 4], 1, FocusFeature, []]`),官方 pip ultralytics `parse_model` 不支持这种多输入格式 — **无论 codegen 是否修复都需要额外处理**。
 
+  
+
 **现状**:
+
 - 多输入模块在魔改版 ultralytics 下能跑(因为有 `elif m is FocusFeature:` 等硬编码分支)
+
 - 切到官方版后,parse_model 直接拒绝 list 形式的 `from`
 
+  
+
 **两条候选路径(需用户拍板)**:
+
 - **3a:monkey-patch parse_model**
-  - 项目运行时给官方 ultralytics 的 `parse_model` 加 multi-input 处理逻辑
-  - 违反 A1 决策初衷"用官方版,不动 ultralytics 内部"
-  - 引入对 ultralytics 内部 API 的运行时绑定 → 版本升级踩坑可能性大
+
+  - 项目运行时给官方 ultralytics 的 `parse_model` 加 multi-input 处理逻辑
+
+  - 违反 A1 决策初衷"用官方版,不动 ultralytics 内部"
+
+  - 引入对 ultralytics 内部 API 的运行时绑定 → 版本升级踩坑可能性大
+
 - **3b:改 yaml 结构**
-  - 把多输入模块拆成多个单输入 + Concat
-  - 需重新审视论文模型 yaml 表达
-  - 可能影响 codegen 生成逻辑(当前 codegen 假设单输入或多输入随意)
+
+  - 把多输入模块拆成多个单输入 + Concat
+
+  - 需重新审视论文模型 yaml 表达
+
+  - 可能影响 codegen 生成逻辑(当前 codegen 假设单输入或多输入随意)
+
+  
 
 **修法**:用户先拍板 3a vs 3b,再起施工提示词。
 
+  
+
 **触发修复时机**:**立即**(在 codegen 任务 1+2 之后,P5-S3 主体之前)。
+
+  
 
 **预估成本**:2-4 天(取决于路径选择和涉及模块数量)
 
+  
+
 **文件**:
+
 - 3a:`backend/app/ml/runtime/` 下新增 patch 文件 + 启动时挂载
+
 - 3b:`backend/app/ml/runtime/yaml_generator.py` + 论文模型 yaml 表达重新设计
 
+  
+
 **关联**:
+
 - [P0] codegen `_get_init_params` 重写 — 通常一并处理
 
+**关闭语**:
+
+> **[已修复 · 第六任清扫期 C-2 + C-3-C · 2026-04-29]**
+> 用户拍板路径 3a(D7 决策),新建 `backend/app/ml/runtime/ultralytics_patch.py`,patch 官方 ultralytics 的 `parse_model`(支持多输入 list `f`)+ `guess_model_task`(支持 Detect_SASD task 推断)。C-3-C 期间还修了 import 缓存同步问题(`engine.model` 模块本地引用)。论文 4 模块(PMSFA / FocusFeature / CSP_PMSFA / Detect_SASD)在官方 pip ultralytics 下全部 `parse_model` ✅ + `YOLO()` 构造 ✅ + 完整 forward ✅。详见 commits `ed74a05` / `2e7c0dc`。
+>
+> **Phase 5 P5-S3 起草前必读**:patch 调用顺序必须最早(详见新挂的 [P0] patch 调用顺序显式化条目)。
+
 ---
+
+---
+
+  
 
 ## [P1] augmentation 服务边界框翻转 bug
 
+  
+
 **背景**:
+
 P5-Gate(2026-04-27)修复 `test_augmentation.py` import 后,该测试文件从"完全无法被 pytest 收集"变为"25 个测试全部收集",其中暴露 5 个预先存在的 augmentation 服务逻辑失败。
 
+  
+
 **现状**:
+
 `pytest backend/tests/test_augmentation.py` 5 failed,典型错误信息:`albumentations 边界框翻转后 x_max <= x_min for bbox`。
 
+  
+
 **初步根因推测**(待新会话侦察确认):
+
 - albumentations 库执行水平翻转 / 垂直翻转时,bbox 坐标重新计算后出现 `x_max <= x_min`
+
 - 可能原因:输入 bbox 已是退化情况(零宽度 / 零高度);或 augmentation pipeline 的 `min_visibility` / `min_area` 配置过严;或 albumentations 版本与项目调用方式不兼容
 
+  
+
 **影响**:
+
 现役用户使用 augmentation 模块的水平 / 垂直翻转功能时实际任务可能失败。不阻塞 Phase 5 训练主流程,但用户从 augmentation 产生的 target_dataset 不能用于训练。
 
+  
+
 **触发修复时机**:
+
 Phase 5 主体完成前后,**用独立 Claude 会话**专门处理。当前 Phase 5 策划会话不揽 augmentation 领域工作。
 
+  
+
 **修复入口建议**:
+
 - 主代码:`backend/app/services/augmentation/` 下的水平 / 垂直翻转操作实现
+
 - 测试:`backend/tests/test_augmentation.py`
+
 - 相关 schema:`backend/app/schemas/augmentation.py`(pipeline_config 结构)
+
 - 相关 ORM:`backend/app/models/augmentation.py`(AugmentationJob.pipeline_config 字段)
+
+  
 
 **预估成本**:1-3 小时,主要在定位 albumentations 配置 vs 真实 bbox 数据的兼容性。
 
+  
+
 **修复后基线**:
+
 test_augmentation.py 范围内 `5 failed` 应清零,全套测试基线变为 `185 passed, 0 failed`(以 codegen 修复完成后基线为准)。
 
+  
+
+**关闭语**:
+
+  
+
+> **[已修复 · 第六任清扫期 C-4 · 2026-04-29]**
+
+> 根因判定为 C(调用方式不兼容):`to_albumentations()` 输出 YOLO 格式 `[x_center, y_center, width, height]`,但 `BboxParams(format='pascal_voc')` 错误声明输入是 `[x_min, y_min, x_max, y_max]`,导致 albumentations 把 x_center 当 x_min、width 当 x_max。修复:`BboxParams` 改为 `format='yolo'` + 输入预 clamp + 输出用 `from_albumentations()`。25/25 augmentation 测试全部通过。详见 commit `8f55c32`。
+
+  
+
 ---
+
+  
 
 ## [P2 · Phase 5 落地依赖] 删除 ModelBuilderConfig 时前端弹警告
 
+  
+
 **背景**:
+
 P5-S1(2026-04-27)在 `ModelBuilderConfig.training_jobs` 设 `cascade="all, delete-orphan"`。删除 ModelBuilderConfig 时级联删除关联 TrainingJob 记录(含 metrics / weights_path / log_path 等训练产出)。后端 `ondelete="CASCADE"` + ORM cascade 双重保证。
 
+  
+
 **现状**:
+
 ORM 层级联删除已落地,但前端模型构建器删除按钮当前**直接发删除请求**,没有提示用户级联删除的影响。
 
+  
+
 **修法**:
+
 前端在 ModelBuilderConfig 删除操作触发前(列表页 / 详情页删除按钮),弹 confirm 对话框:
+
+  
 
 > 删除此画布配置将一并删除关联的 N 个训练任务及其训练指标、模型权重。此操作不可恢复,是否继续?
 
+  
+
 用户明确点击"确认"后才发删除请求。N 来源:后端 GET `/api/v1/model-configs/{id}` 时一并返回 `training_jobs_count`(或类似字段),前端读取该字段。如果列表页直接删除,确认列表 API 是否也包含该字段。
 
+  
+
 **文件**:
+
 - `frontend/src/pages/admin/ModelBuilder*.tsx`(实际位置以现役代码为准)
+
 - 可能要新增前端共用 confirm 组件(如果删除入口分布多处)
+
 - `backend/app/api/v1/model_builder.py`(GET 端点加 training_jobs_count 字段)
 
+  
+
 **触发修复时机**:
+
 P5-S5(前端 TrainingPage)起草时一并落地,**必须在前端开放删除按钮给真实用户前**完成,否则有误删风险。
+
+  
 
 **预估成本**:1-2 小时(后端加字段 + 前端加 confirm 对话框)。
 
+  
+
 ---
+
+  
 
 ## [P3] detection.py / module_definition.py 的 Pydantic V2 警告
 
+  
+
 **背景**:
+
 P5-S1(2026-04-27)在 training schema 加 `ConfigDict(protected_namespaces=())` 消除了 `model_builder_config_id` 触发的 Pydantic V2 protected namespace 警告。但 P5-S1 自验输出显示,项目内还有 2 处同类警告未处理。
 
+  
+
 **现状**:
+
 - `backend/app/models/detection.py` — `model_id` 字段触发 `Field "model_id" has conflict with protected namespace "model_"`
+
 - `backend/app/models/module_definition.py` — `schema_json` 字段触发 `schema_json shadows an attribute`
 
+  
+
 **修法**:
+
 对涉及的 Pydantic 类(应该是 schema 而非 ORM,看 P5-S1 报告未明确)加 `model_config = ConfigDict(protected_namespaces=())`,或重命名字段。
 
+  
+
 **触发修复时机**:
+
 Phase 5 主体完成前后,或下次动 detection / module_definition 模块时顺手修。不阻塞 Phase 5。
+
+  
 
 **预估成本**:15-30 分钟(两个文件各加一行 ConfigDict 配置)。
 
+  
+
+**关闭语**:
+
+  
+
+> **[已修复部分 · 第六任清扫期 C-6 · 2026-04-29]**
+
+> `model_id` 警告通过 `ConfigDict(protected_namespaces=())` 真清零(detection.py)。`schema_json` 警告**机制不同**(shadowing 检测,非 protected_namespaces),`ConfigDict` 无法消除 — **只能通过重命名字段消除**。本任 D20 决策**保留 1 处诚实债**(2-4 条 shadowing 警告),挂新 backlog 条目"`schema_json` 字段重命名"(见 B 部分)。
+
+>
+
+> backlog 描述误判路径:实际触发警告的 Pydantic 类在 `backend/app/schemas/`,非 `backend/app/models/`。详见 commits `6e638bd`(detection)+ `124d644`(module_def 加 ConfigDict)+ `f7d736c`(回滚 filterwarnings)。
+
+  
+  
+
 ---
+
+  
 
 ## [P3] augmentation 模块权限校验下沉到 service 层
 
+  
+
 **背景**:
+
 P5-S2-HF1(2026-04-27)在 training 模块把权限校验放在 service 层(`_check_job_ownership` 辅助方法),API 层只传 `current_user_id`。这是更干净的分层:service 可独立测试,API 层只关心 HTTP 协议。
+
+  
 
 augmentation 模块现役权限校验在 API 层(端点函数内直接 `if job.created_by != current_user.user_id`),service 层完全不感知用户身份。
 
+  
+
 **现状**:
+
 两个模块权限分层不一致。training 是健康分层,augmentation 是历史习惯。
 
+  
+
 **修法**:
+
 augmentation_service.py 的相关方法签名加 `current_user_id` 参数,把权限校验从 API 层下沉。API 层保留 `Depends(get_current_user)`,把 user_id 传给 service。
 
+  
+
 **触发修复时机**:
+
 augmentation 模块下次有结构性改动时(如修 [P1] augmentation 服务边界框翻转 bug 涉及 service 层时)顺手做。不阻塞任何当前功能。
+
+  
 
 **预估成本**:1-2 小时。
 
+  
+
 **关联**:
+
 - [P1] augmentation 服务边界框翻转 bug
+
+  
+
+**关闭语**:
+
+  
+
+> **[已修复 · 第六任清扫期 C-7 · 2026-04-29]**
+
+> 实施时发现 `augmentation_service.py` **原本 0 个**操作"特定 job"的 public 方法(所有 job SQL 在 API 层),本质上需要新建 `AugmentationJobService` 类对齐 training 模式,而不只是"加 `current_user_id` 参数"。新增类含 5 个方法(get_job / list_jobs / create_job / get_job_progress / control_job)+ `_check_job_ownership` 辅助方法。API 层降为 thin wrapper。详见 commits `3b7cc05` / `b98e432`。
+
+  
 
 ---
 
-## [P3] P5-S3-Recon PoC 脚本归档
+  
+
+## [已处理 · 第六任清扫期 C-8 · 2026-04-29] [P3] P5-S3-Recon PoC 脚本归档
+
+  
 
 **背景**:
+
 P5-S3-Recon-1 + Recon-2(2026-04-27)产出了 4 个 untracked 文件:
+
 - `backend/scripts/recon_celery_ultralytics_poc.py` — Recon-1 PoC(独立 Celery app + ultralytics setattr 注入验证)
+
 - `backend/scripts/recon_report.md` — Recon-1 报告
+
 - `backend/scripts/recon_codegen_signature_poc.py` — Recon-2 PoC(codegen 4 类签名验证)
+
 - `backend/scripts/recon_codegen_signature_report.md` — Recon-2 报告(必读!)
 
+  
+
 **现状**:
+
 均为 git untracked 状态(本任侦察约束:不主动 commit 主代码)。
 
+  
+
 **保留价值**:
+
 - Recon-2 报告是 codegen gap 完整诊断,**P0 codegen 修复任务的核心起点**
+
 - Recon-1 PoC 脚本提供 Celery 独立 app 启动 + setattr 注入模式,P5-S3 实现可参考
+
 - Recon-2 PoC 脚本提供 codegen 4 类验证的最小调试入口,codegen 修复期间复用
 
+  
+
 **触发处理时机**:
+
 codegen 修复(P0)+ P5-S3 主体完成后:
+
 - 如果 P5-S3 实现完整覆盖了 PoC 验证场景 → 删除
+
 - 如果只覆盖部分 → 保留作为长期回归验证脚本
+
 - 或统一移到独立 `backend/scripts/recon/` 子目录归档
+
+  
 
 **预估成本**:5-15 分钟。
 
+  
+
 **关联**:
+
 - [P0] codegen 修复 — 期间会重度复用 Recon-2 报告 + Recon-2 PoC
+
 - 详细诊断:`backend/scripts/recon_codegen_signature_report.md`
+
+
+**关闭语**:
+
+> **[已处理 · 第六任清扫期 C-8 + C-8-Revert · 2026-04-29]**
+> D23 决策:PoC 脚本(`recon_codegen_signature_poc.py` + `recon_celery_ultralytics_poc.py`)入 git 作为产线验收代码(`backend/scripts/`)。D24 决策:历史报告 `.md` 留 `docs/private/` 本地存档(尊重 .gitignore 不入 git,通过用户手动上传给后任)。
+> Step 1 期间 `recon_forward_smoketest.py` 已通过 C-3-C 升级为 pytest 主套件正式回归测试 `tests/test_paper_module_forward_compat.py`。详见 commits `96a5370`(PoC 入 git)+ `f0032fe → reset`(C-8.2 回滚)。
+
+---
+
+---
+
+  
+
+## [P3] module_definition schema 的 `schema_json` 字段重命名
+
+  
+
+**背景**:
+
+C-6(2026-04-29)修复 Pydantic V2 protected namespace 警告时发现 `module_definition.py` 中的 `schema_json` 字段触发 **shadowing 警告**(`Field name "schema_json" shadows an attribute in parent "BaseModel"`),与 BaseModel 的 `schema_json()` 方法名冲突。
+
+  
+
+**与 `model_id` 警告的机制差异**:
+
+- `model_id` 警告由 Pydantic V2 的 `protected_namespaces` 机制触发,可通过 `ConfigDict(protected_namespaces=())` **配置消除**
+
+- `schema_json` 警告由 Pydantic V2 的 **shadowing 检测**触发(字段名 vs 父类方法名),**ConfigDict 无法配置消除**,**只能通过重命名字段消除**
+
+  
+
+**现状**:
+
+C-6 期间施工方曾用 `warnings.filterwarnings(...)` 抑制此警告以达成"清零"表面目标。但策划方审视后判定**抑制 ≠ 消除**(违反清扫期"修对而非掩盖"原则),C-6-Cleanup(2026-04-29)已回滚该 filterwarnings,**警告残留 2-4 条**。
+
+  
+
+**位置**:
+
+- `backend/app/schemas/module_definition.py:42` — `ModuleDefinitionDetail.schema_json` 字段
+
+- `backend/app/schemas/module_definition.py:47` — `ModuleDefinitionResponse`(继承 `ModuleDefinitionDetail`)
+
+  
+
+**修法**:
+
+重命名 `schema_json` 字段 → `module_schema_json`(或类似表义清晰的名字)。同步修改:
+
+1. Pydantic schema 字段名
+
+2. ORM(`backend/app/models/module_definition.py`)对应字段
+
+3. 数据库 migration(可能需要 alembic)
+
+4. API 端点对外契约(如有 `schema_json` 序列化字段在响应里,前端需同步)
+
+5. 所有引用该字段的代码(grep `schema_json` 全项目)
+
+  
+
+**影响**:
+
+- **API 契约变更**:如果前端有读 `schema_json` 字段,需同步前端
+
+- **数据库迁移**:如果数据库列名是 `schema_json`,需 migration
+
+- **测试同步**:可能涉及 fixture / 断言
+
+  
+
+**触发修复时机**:
+
+第七任策划方接手后,**Phase 5 主体启动前**或**下次结构性修改 module_definition 模块时**顺手做。
+
+不阻塞任何 Phase 5 主体功能(警告只是日志噪音,不影响运行时行为)。
+
+  
+
+**预估成本**:
+
+- 字段重命名 + 引用同步:1-2 小时
+
+- 数据库 migration(如需):0.5-1 小时
+
+- 前端同步(如需):0.5-1 小时
+
+- 测试调整:0.5 小时
+
+- **总计:2-4 小时**(具体取决于 API 契约和数据库迁移复杂度)
+
+  
+
+**关联**:
+
+- C-6(已修)— `model_id` 警告通过 ConfigDict 已清零
+
+- C-6-Cleanup(已修)— 回滚了 filterwarnings 抑制方案
+
+- 清扫期教训:抑制警告 ≠ 消除警告(诚实记录技术债优于掩盖)
+
+  
+
+**关闭语(追加到原条目末尾)**:
+
+  
+
+> **[已修复 · 第六任清扫期 C-1 · 2026-04-29]**
+
+> 通过 C-1.1 + C-1.2 修复:`_get_init_params` 改按 `params_schema` 顺序提取 + 包含全部 schema 声明参数 + 默认值。B-4 测试改用位置参数 `cls(*args)` 模拟 ultralytics `parse_model` 调用,真覆盖协议层。详见 commits `db69566` / `dfc1646`。
+
+---
+
+  
+
+## [P0 · 触发时机:Phase 5 P5-S3 主体起草前] patch 调用顺序显式化
+
+  
+
+**背景**:
+
+第六任清扫期 C-3-Verify(2026-04-29)发现:`apply_ultralytics_patches()` **必须在任何代码 import `ultralytics.engine.model` 之前调用**,否则 patch 失效(import 缓存问题,因 `engine.model` 模块加载时绑定了 `guess_model_task` 局部引用)。C-3-C 修了 `engine.model` 一处缓存同步,但**不能保证未来不会有其他模块也 import 缓存**。
+
+  
+
+**P5-S3 主体起草前必须**:
+
+1. 显式列出"patch 必须最早"作为产品契约
+
+2. 在 Celery worker 入口 / FastAPI app `lifespan` / 训练命令行脚本顶部都加 patch 调用
+
+3. 加单元测试验证"patch 在 worker 启动时已生效"
+
+4. 文档化:任何新增的 ultralytics 模块入口都要走 patch
+
+  
+
+**预估成本**:1-2 小时(显式化文档 + 单元测试)。
+
+  
+
+**关联**:
+
+- 教训 28(协议消费方完整识别)— patch 的"消费方"包括所有调用 ultralytics 的代码路径
+
+  
+
+---
+
+  
+
+## [P0 · 触发时机:Phase 5 P5-S3 主体起草前] 端到端 1 epoch 训练 smoke 验证
+
+  
+
+**背景**:
+
+第六任清扫期最重要的"未覆盖事实"——清扫期所有 forward 协议测试(包括 `test_paper_module_forward_compat.py`)都用**自定义 `_predict_once`** 模拟前向,**不通过 ultralytics 的 `engine.model`**。生产路径(`YOLO(yaml).train(...)`)走 engine.model + 数据加载 + 增强 + 检查点,本任未覆盖。
+
+  
+
+**P5-S3 主体起草前必须**:
+
+- 用一个真实 yaml(含论文模块)
+
+- 调 `YOLO(yaml).train(data=..., epochs=1, imgsz=320, batch=2)`
+
+- 验证不报错 + checkpoint 正确写出 + 训练过程无异常 warning
+
+  
+
+如发现新问题,**回到清扫期解决**,不要带着 P5-S3 主体上路。
+
+  
+
+**预估成本**:1-2 小时(包含构造测试数据 + 跑 1 epoch + 排查可能的新坑)。
+
+  
+
+**关联**:
+
+- 教训 28(协议消费方)+ 教训 25(B 系列已通过 ≠ Phase 5 兼容)
+
+  
+
+---
+
+  
+
+## [P2 · 触发时机:第七任动 module_definition 模块时] `schema_json` 字段重命名
+
+  
+
+**背景**:
+
+C-6(2026-04-29)修复 Pydantic V2 警告时发现 `module_definition.py` 的 `schema_json` 字段触发 **shadowing 警告**(`Field name "schema_json" shadows an attribute in parent "BaseModel"`),与 BaseModel 的 `schema_json()` 方法名冲突。
+
+  
+
+**与 `model_id` 警告的机制差异**:
+
+- `model_id` 警告:`protected_namespaces` 机制 → `ConfigDict(protected_namespaces=())` 配置消除 ✅(已修)
+
+- `schema_json` 警告:**shadowing 检测** → `ConfigDict` 无法配置消除,**只能通过重命名字段消除**
+
+  
+
+**现状**:
+
+C-6 期间施工方曾用 `warnings.filterwarnings(...)` 抑制此警告,策划方 D20 决策回滚(C-6-Cleanup),**警告残留 2-4 条作为诚实债**(教训 29:抑制 ≠ 消除)。
+
+  
+
+**位置**:
+
+- `backend/app/schemas/module_definition.py:42` — `ModuleDefinitionDetail.schema_json` 字段
+
+- `backend/app/schemas/module_definition.py:47` — `ModuleDefinitionResponse`(继承)
+
+  
+
+**修法**:
+
+重命名 `schema_json` → `module_schema_json`(或类似表义清晰的名字)。同步:
+
+1. Pydantic schema 字段名
+
+2. ORM 对应字段(如有)
+
+3. 数据库 migration(如需)
+
+4. API 端点对外契约(如前端读 `schema_json` 字段需同步)
+
+5. 所有引用该字段的代码(grep 全项目)
+
+  
+
+**预估成本**:2-4 小时。
+
+  
+
+**关联**:
+
+- 教训 29(抑制 ≠ 消除)
+
+- C-6 / C-6-Cleanup 提交历史
+
+  
+
+---
+
+  
+
+## [P3 · 触发时机:augmentation 模块下次结构性改动时] augmentation 字段命名清晰度
+
+  
+
+**背景**:
+
+C-4(2026-04-29)augmentation 边界框翻转 bug 修复时暴露:`BBox.to_albumentations()` 方法名暗示输出"albumentations 格式",**实际输出 YOLO 格式**(`[x_center, y_center, width, height]`,因 albumentations 通过 `BboxParams(format='yolo')` 接受这种格式)。命名歧义曾导致 5 个测试失败的根因被错误诊断。
+
+  
+
+**修法建议**:
+
+- `to_albumentations()` → `to_yolo_for_albumentations()` 或加 docstring 明确"返回 YOLO 格式供 albumentations 调用"
+
+- `from_albumentations()` 同理审视
+
+  
+
+**预估成本**:30-60 分钟(命名修改 + docstring + 调用方 grep)。
+
+  
+
+**注意**:这是清晰度债,不影响功能,优先级低。
+
+  
+
+---
+
+  
+
+## [P3 · 触发时机:Phase 4b A-5 / B-7 决策时] CSP_PMSFA `n` 参数静默忽略
+
+  
+
+**背景**:
+
+C-1.4(2026-04-28)Recon-2 验证发现:codegen 生成的 CSP_PMSFA `__init__` 接受 `n` 参数但**内部不使用**(参数被 schema 声明但 sub_nodes 拓扑结构里没有相应节点引用)。当前行为:用户传 `n=2` 时不报错也不生效,**静默忽略**。
+
+  
+
+**风险**:
+
+- 用户在画布上调整 `n` 参数,没有任何反馈说"这个参数被忽略了"
+
+- 第七任如有用户反馈"我改了 n 但训练效果没变化",可能在这里查很久
+
+  
+
+**修法候选**:
+
+- 选 A:codegen 检测"声明但未使用"的参数,生成 warning 或抛错
+
+- 选 B:在 schema 层强制要求所有声明参数必须在 sub_nodes 中引用
+
+- 选 C:CSP_PMSFA 的 `n` 参数对应的拓扑结构补全(让它真生效)
+
+  
+
+**预估成本**:取决于选择路径,1-4 小时。
+
+  
+
+**关联**:
+
+- C-1.4 报告(对话历史)
+
+- B-2 codegen 修复时的"漏洞 backlog"
+
+## [P3 · 触发时机:Phase 5 主体完成后或代码审查批次] 测试名命名层 vs 行为层一致性审视
+
+**背景**:
+第六任清扫期 C-3-Recon 期间(2026-04-29)发现:`test_parse_model_positional_call_compat_*` 系列测试**名字承诺**"模拟 ultralytics parse_model 位置参数调用",**实际行为**调用 `module(p5, p4, p3)` 多独立位置参数——但 ultralytics 真实生产路径是 `m(x)` 单参数 list。**测试名字承诺的事 ≠ 测试代码做的事**。
+
+C-3-B 已通过改测试调用方式解决了 6 个 `test_parse_model_positional_call_compat_*` 的此问题,但**项目里其他测试**可能也存在类似命名层与行为层错位的情况。
+
+**修法**:
+代码审查批次时,grep 项目中所有 `test_*_compat`/`test_*_simulation`/`test_*_mock` 类测试名,逐个核对:
+- 测试名字承诺的"调用方式 / 协议 / 行为"
+- 测试代码实际执行的"调用方式 / 协议 / 行为"
+- 两者是否一致?如不一致,是改名 or 改行为?
+
+**预估成本**:1-2 小时(取决于发现的不一致测试数)。
+
+**关联**:
+- 教训 25(B 系列已通过验收 ≠ Phase 5 兼容)
+- 教训 26(测试机制必须模拟生产调用方式)
+- 教训 28(协议消费方完整识别)— 测试名也是协议的一种声明,需要和行为对齐
+
+---
+
+## [P3 · 触发时机:动 conftest 或 model FK 定义时] conftest drop_all FK 循环导致 SAWarning 累积
+
+> 来源:第七任 P5-S3-T1(2026-05-01)
+>
+> 现象:每个新增测试文件都会让后端 pytest warnings 计数 +1(SAWarning: Can't sort tables for DROP)。T1 新增 `test_ultralytics_patch_entry_points.py` 后基线从 209 → 212(+3)。
+>
+> 根因:`backend/tests/conftest.py` 中 `Base.metadata.drop_all()` 处理表删除顺序时,model 间存在 FK 循环依赖(SQLAlchemy 无法拓扑排序),fallback 到 unsorted 删除,触发 SAWarning。每次 pytest session setup 调一次,新测试文件无法避开。
+>
+> 影响:warning 计数随测试文件数线性增长,但**功能完全正常**——drop_all 实际执行成功(SQLite + sqlalchemy 的 unsorted drop 在禁用 FK 后是合法操作)。这不是测试失败,是基础设施告警噪音。
+>
+> 不立即修的理由:T1 提示词第 7 任策划方决策"接受 212 + 挂 backlog",认同这是 conftest 基础设施债,不属于 T1 范围。修法需要要么改 conftest 删除策略(显式 PRAGMA / 反向 sorted 删除)、要么消除 model 间 FK 循环——前者影响所有测试,后者是 schema 改动,都是破坏性改动。
+>
+> 修复路径(任选):
+> - **路径 A**:`conftest.py` 改为 `Base.metadata.drop_all(bind=engine, checkfirst=False)` + 显式禁用 FK 检查(SQLite `PRAGMA foreign_keys=OFF`)
+> - **路径 B**:重新审视 model FK 设计,消除循环依赖(可能涉及多张表的 relationship 重构,工作量大)
+> - **路径 C**:升级 SQLAlchemy 版本,看新版是否有更好的 drop_all 排序逻辑
+>
+> 触发时机:下一次动 `conftest.py` 或任意 model FK 定义时,顺手按路径 A 修(成本最低);路径 B/C 不主动启动,等其他需求触发。
