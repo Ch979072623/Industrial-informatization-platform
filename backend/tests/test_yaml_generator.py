@@ -355,6 +355,113 @@ class TestExtractArgs:
         assert result == [2, 1]
 
 
+class TestSchemaDefaultFallback:
+    """schema default fallback 测试（通过 architecture_to_yaml 入口）"""
+
+    def test_empty_params_uses_schema_default(self):
+        """Case 1: parameters 为空 + schema 有 default → yaml args 含 default 值"""
+        arch = {
+            "nodes": [
+                {
+                    "id": "n1",
+                    "type": "module",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "moduleType": "PMSFA",
+                        "moduleName": "PMSFA",
+                        "parameters": {},
+                        "section": "backbone",
+                    },
+                },
+            ],
+            "edges": [],
+            "metadata": {},
+        }
+
+        def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+            if module_type == "PMSFA":
+                return {
+                    "params_schema": [
+                        {"name": "inc", "type": "int", "default": 64},
+                    ]
+                }
+            return None
+
+        yaml_str = architecture_to_yaml(arch, resolver=resolver)
+        assert "[64]" in yaml_str
+
+    def test_explicit_params_override_default(self):
+        """Case 2: parameters 完整 + 值 ≠ default → yaml args 用 params 值不用 default"""
+        arch = {
+            "nodes": [
+                {
+                    "id": "n1",
+                    "type": "module",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "moduleType": "PMSFA",
+                        "moduleName": "PMSFA",
+                        "parameters": {"inc": 99},
+                        "section": "backbone",
+                    },
+                },
+            ],
+            "edges": [],
+            "metadata": {},
+        }
+
+        def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+            if module_type == "PMSFA":
+                return {
+                    "params_schema": [
+                        {"name": "inc", "type": "int", "default": 64},
+                    ]
+                }
+            return None
+
+        yaml_str = architecture_to_yaml(arch, resolver=resolver)
+        assert "[99]" in yaml_str
+        assert "[64]" not in yaml_str
+
+    def test_partial_params_mixed_with_defaults(self):
+        """Case 3: parameters 部分填 → yaml args 中已填字段用 params 值,缺失字段用 default"""
+        arch = {
+            "nodes": [
+                {
+                    "id": "n1",
+                    "type": "module",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "moduleType": "CSP_PMSFA",
+                        "moduleName": "CSP_PMSFA",
+                        "parameters": {"c1": 256},
+                        "section": "backbone",
+                    },
+                },
+            ],
+            "edges": [],
+            "metadata": {},
+        }
+
+        def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+            if module_type == "CSP_PMSFA":
+                return {
+                    "params_schema": [
+                        {"name": "c1", "type": "int", "default": 128},
+                        {"name": "c2", "type": "int", "default": 128},
+                        {"name": "n", "type": "int", "default": 2},
+                        {"name": "shortcut", "type": "bool", "default": False},
+                        {"name": "e", "type": "float", "default": 1.0},
+                        {"name": "g", "type": "float", "default": 0.5},
+                    ]
+                }
+            return None
+
+        yaml_str = architecture_to_yaml(arch, resolver=resolver)
+        # c1=256 (explicit), c2=128 (default), n=2 (default), shortcut=False (default), e=1.0 (default), g=0.5 (default)
+        assert "[256, 128, 2, False, 1.0, 0.5]" in yaml_str
+
+
 class TestCollectCustomModules:
     """custom composite 触发代码生成测试"""
 

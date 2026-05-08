@@ -122,8 +122,13 @@ def _extract_args(node_data: Dict[str, Any], params_schema: Optional[List[Dict[s
         args: List[Any] = []
         for p in params_schema:
             name = p.get("name")
-            if name is not None and name in params:
+            if name is None:
+                continue
+            if name in params:
                 args.append(params[name])
+            elif "default" in p:
+                args.append(p["default"])
+            # else: 既无 params 值也无 default,跳过(原行为)
         return args
 
     # 无 schema 时保留原始插入顺序
