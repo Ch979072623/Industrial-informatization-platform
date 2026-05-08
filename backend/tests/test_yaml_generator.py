@@ -635,3 +635,228 @@ class TestCollectCustomModules:
         assert results[0]["type"] == "BadBlock"
         assert results[0]["path"] is None
         assert "bad schema" in results[0]["error"]
+
+
+class TestUltralyticsNativeModules:
+    """新增 ultralytics 内置原生模块的 schema default + args 顺序测试"""
+
+    # ---- Conv ----
+    def test_conv_full_params(self):
+        """Conv: parameters 完整 → args 顺序对齐 schema"""
+        arch = {
+            "nodes": [
+                {
+                    "id": "n1",
+                    "type": "Conv",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "moduleType": "Conv",
+                        "parameters": {"c2": 128, "k": 3, "s": 2, "p": None, "g": 1, "d": 1, "act": True},
+                        "section": "backbone",
+                    },
+                },
+            ],
+            "edges": [],
+        }
+
+        def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+            if module_type == "Conv":
+                return {
+                    "type": "Conv",
+                    "source": "builtin",
+                    "is_composite": False,
+                    "schema_json": {},
+                    "params_schema": [
+                        {"name": "c2", "type": "int", "default": 64},
+                        {"name": "k", "type": "int", "default": 1},
+                        {"name": "s", "type": "int", "default": 1},
+                        {"name": "p", "type": "int", "default": None},
+                        {"name": "g", "type": "int", "default": 1},
+                        {"name": "d", "type": "int", "default": 1},
+                        {"name": "act", "type": "bool", "default": True},
+                    ],
+                }
+            return None
+
+        yaml_str = architecture_to_yaml(arch, resolver=resolver)
+        assert "[-1, 1, Conv, [128, 3, 2, None, 1, 1, True]]" in yaml_str
+
+    def test_conv_empty_params_fallback(self):
+        """Conv: parameters 为空 → args = schema default (D1 fallback)"""
+        arch = {
+            "nodes": [
+                {
+                    "id": "n1",
+                    "type": "Conv",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "moduleType": "Conv",
+                        "parameters": {},
+                        "section": "backbone",
+                    },
+                },
+            ],
+            "edges": [],
+        }
+
+        def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+            if module_type == "Conv":
+                return {
+                    "type": "Conv",
+                    "source": "builtin",
+                    "is_composite": False,
+                    "schema_json": {},
+                    "params_schema": [
+                        {"name": "c2", "type": "int", "default": 64},
+                        {"name": "k", "type": "int", "default": 1},
+                        {"name": "s", "type": "int", "default": 1},
+                        {"name": "p", "type": "int", "default": None},
+                        {"name": "g", "type": "int", "default": 1},
+                        {"name": "d", "type": "int", "default": 1},
+                        {"name": "act", "type": "bool", "default": True},
+                    ],
+                }
+            return None
+
+        yaml_str = architecture_to_yaml(arch, resolver=resolver)
+        assert "[-1, 1, Conv, [64, 1, 1, None, 1, 1, True]]" in yaml_str
+
+    # ---- SPPF ----
+    def test_sppf_full_params(self):
+        """SPPF: parameters 完整 → args 顺序对齐 schema"""
+        arch = {
+            "nodes": [
+                {
+                    "id": "n1",
+                    "type": "SPPF",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "moduleType": "SPPF",
+                        "parameters": {"c2": 512, "k": 5},
+                        "section": "backbone",
+                    },
+                },
+            ],
+            "edges": [],
+        }
+
+        def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+            if module_type == "SPPF":
+                return {
+                    "type": "SPPF",
+                    "source": "builtin",
+                    "is_composite": False,
+                    "schema_json": {},
+                    "params_schema": [
+                        {"name": "c2", "type": "int", "default": 1024},
+                        {"name": "k", "type": "int", "default": 5},
+                    ],
+                }
+            return None
+
+        yaml_str = architecture_to_yaml(arch, resolver=resolver)
+        assert "[-1, 1, SPPF, [512, 5]]" in yaml_str
+
+    def test_sppf_empty_params_fallback(self):
+        """SPPF: parameters 为空 → args = schema default (D1 fallback)"""
+        arch = {
+            "nodes": [
+                {
+                    "id": "n1",
+                    "type": "SPPF",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "moduleType": "SPPF",
+                        "parameters": {},
+                        "section": "backbone",
+                    },
+                },
+            ],
+            "edges": [],
+        }
+
+        def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+            if module_type == "SPPF":
+                return {
+                    "type": "SPPF",
+                    "source": "builtin",
+                    "is_composite": False,
+                    "schema_json": {},
+                    "params_schema": [
+                        {"name": "c2", "type": "int", "default": 1024},
+                        {"name": "k", "type": "int", "default": 5},
+                    ],
+                }
+            return None
+
+        yaml_str = architecture_to_yaml(arch, resolver=resolver)
+        assert "[-1, 1, SPPF, [1024, 5]]" in yaml_str
+
+    # ---- Detect ----
+    def test_detect_full_params(self):
+        """Detect: parameters 完整 → args 顺序对齐 schema"""
+        arch = {
+            "nodes": [
+                {
+                    "id": "n1",
+                    "type": "Detect",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "moduleType": "Detect",
+                        "parameters": {"nc": 6},
+                        "section": "head",
+                    },
+                },
+            ],
+            "edges": [],
+        }
+
+        def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+            if module_type == "Detect":
+                return {
+                    "type": "Detect",
+                    "source": "builtin",
+                    "is_composite": False,
+                    "schema_json": {},
+                    "params_schema": [
+                        {"name": "nc", "type": "int", "default": 80},
+                    ],
+                }
+            return None
+
+        yaml_str = architecture_to_yaml(arch, resolver=resolver)
+        assert "[-1, 1, Detect, [6]]" in yaml_str
+
+    def test_detect_empty_params_fallback(self):
+        """Detect: parameters 为空 → args = schema default (D1 fallback)"""
+        arch = {
+            "nodes": [
+                {
+                    "id": "n1",
+                    "type": "Detect",
+                    "position": {"x": 0, "y": 0},
+                    "data": {
+                        "moduleType": "Detect",
+                        "parameters": {},
+                        "section": "head",
+                    },
+                },
+            ],
+            "edges": [],
+        }
+
+        def resolver(module_type: str) -> Optional[Dict[str, Any]]:
+            if module_type == "Detect":
+                return {
+                    "type": "Detect",
+                    "source": "builtin",
+                    "is_composite": False,
+                    "schema_json": {},
+                    "params_schema": [
+                        {"name": "nc", "type": "int", "default": 80},
+                    ],
+                }
+            return None
+
+        yaml_str = architecture_to_yaml(arch, resolver=resolver)
+        assert "[-1, 1, Detect, [80]]" in yaml_str
