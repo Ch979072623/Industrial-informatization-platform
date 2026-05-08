@@ -30,7 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { ReactFlowInstance } from '@xyflow/react';
 import { ModuleLibrary } from '@/components/model-builder/ModuleLibrary';
 import { ModelCanvas } from '@/components/model-builder/ModelCanvas';
-import { NodeConfigPanel } from '@/components/model-builder/NodeConfigPanel';
+import { NodeConfigPanel, extractDefaults } from '@/components/model-builder/NodeConfigPanel';
 import { NewCanvasDialog } from '@/components/model-builder/NewCanvasDialog';
 import { ExportDialog } from '@/components/model-builder/ExportDialog';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -336,10 +336,30 @@ export default function ModelBuilder() {
       try {
         setSaving(true);
         const currentMode = useModelBuilderStore.getState().mode;
+
+        // 参数补齐：空 parameters 的节点自动填充 schema default（D-CS-2-3: 只改 configData，不写回 store）
+        const filledNodes = await Promise.all(
+          (nodes as unknown as ModelNode[]).map(async (n) => {
+            const params = (n.data.parameters as Record<string, unknown>) || {};
+            if (Object.keys(params).length > 0) return n;
+            const moduleType = n.data.moduleType;
+            if (!moduleType) return n;
+            const response = await mlModuleApi.getModule(moduleType);
+            if (response.data.success && response.data.data) {
+              const detail = response.data.data as ModuleDefinitionDetail;
+              const defaults = extractDefaults(detail.params_schema);
+              if (Object.keys(defaults).length > 0) {
+                return { ...n, data: { ...n.data, parameters: defaults } };
+              }
+            }
+            return n;
+          })
+        );
+
         const configData: ModelBuilderConfigCreate = {
           name: saveFormData.name,
           description: saveFormData.description || undefined,
-          architecture_json: { nodes: nodes as unknown as ModelNode[], edges: edges as unknown as ModelEdge[], metadata: { description: saveFormData.description || undefined, mode: currentMode } },
+          architecture_json: { nodes: filledNodes, edges: edges as unknown as ModelEdge[], metadata: { description: saveFormData.description || undefined, mode: currentMode } },
           is_public: false,
         };
         const response = await modelBuilderApi.createConfig(configData);

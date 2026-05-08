@@ -102,6 +102,13 @@ vi.mock('@/components/model-builder/ModuleLibrary', () => ({
 
 vi.mock('@/components/model-builder/NodeConfigPanel', () => ({
   NodeConfigPanel: () => <div data-testid="node-config-panel" />,
+  extractDefaults: (paramsSchema: Array<{ name: string; default?: unknown }>) => {
+    const d: Record<string, unknown> = {};
+    for (const p of paramsSchema) {
+      if (p.default !== undefined) d[p.name] = p.default;
+    }
+    return d;
+  },
 }));
 
 vi.mock('@/components/ErrorBoundary', () => ({
@@ -123,6 +130,7 @@ describe('ModelBuilder port node guard', () => {
       updateNodeInternalsRef: null,
       mode: 'architecture',
     });
+    vi.mocked(mlModuleApi.getModule).mockClear();
     vi.mocked(mlModuleApi.getModule).mockClear();
     vi.mocked(mlModuleApi.createModule).mockClear();
     vi.mocked(modelBuilderApi.createConfig).mockClear();
@@ -341,5 +349,187 @@ describe('ModelBuilder save dialog branch', () => {
         })
       );
     });
+  });
+
+  it('保存时空 parameters 节点自动补齐 schema default', async () => {
+    useModelBuilderStore.setState({
+      nodes: [
+        { id: 'n1', type: 'module', position: { x: 0, y: 0 }, data: { moduleType: 'PMSFA', moduleName: 'PMSFA', parameters: {}, section: 'backbone' } },
+      ] as unknown as import('@/types/mlModule').RFNode[],
+      edges: [],
+      selectedNodeId: null,
+      history: [],
+      historyIndex: -1,
+      moduleSchemas: {},
+      moduleSchemaLoading: {},
+      moduleSchemaError: {},
+      updateNodeInternalsRef: null,
+      mode: 'architecture',
+    });
+    vi.mocked(mlModuleApi.getModule).mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          type: 'PMSFA',
+          display_name: 'PMSFA',
+          category: 'backbone',
+          is_composite: false,
+          proxy_inputs: [],
+          proxy_outputs: [],
+          params_schema: [{ name: 'inc', type: 'int', default: 64 }],
+          input_ports_dynamic: false,
+        },
+      },
+    } as unknown as Awaited<ReturnType<typeof mlModuleApi.getModule>>);
+    vi.mocked(modelBuilderApi.createConfig).mockResolvedValue({
+      data: { success: true, data: { id: 1 } },
+    } as unknown as Awaited<ReturnType<typeof modelBuilderApi.createConfig>>);
+
+    const ModelBuilder = (await import('./ModelBuilder')).default;
+    render(<ModelBuilder />);
+
+    fireEvent.click(screen.getByTestId('save-button'));
+    await waitFor(() => expect(screen.getByText('保存模型配置')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('配置名称 *'), { target: { value: 'TestConfig' } });
+    const saveButtons = screen.getAllByText('保存');
+    fireEvent.click(saveButtons[saveButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(modelBuilderApi.createConfig).toHaveBeenCalledOnce();
+    });
+
+    const callArg = vi.mocked(modelBuilderApi.createConfig).mock.calls[0][0];
+    expect(callArg.architecture_json.nodes[0].data.parameters).toEqual({ inc: 64 });
+  });
+
+  it('保存时已有 parameters 的节点不会被覆盖', async () => {
+    useModelBuilderStore.setState({
+      nodes: [
+        { id: 'n1', type: 'module', position: { x: 0, y: 0 }, data: { moduleType: 'PMSFA', moduleName: 'PMSFA', parameters: { inc: 99 }, section: 'backbone' } },
+      ] as unknown as import('@/types/mlModule').RFNode[],
+      edges: [],
+      selectedNodeId: null,
+      history: [],
+      historyIndex: -1,
+      moduleSchemas: {},
+      moduleSchemaLoading: {},
+      moduleSchemaError: {},
+      updateNodeInternalsRef: null,
+      mode: 'architecture',
+    });
+    vi.mocked(modelBuilderApi.createConfig).mockResolvedValue({
+      data: { success: true, data: { id: 1 } },
+    } as unknown as Awaited<ReturnType<typeof modelBuilderApi.createConfig>>);
+
+    vi.mocked(mlModuleApi.getModule).mockClear();
+
+    const ModelBuilder = (await import('./ModelBuilder')).default;
+    render(<ModelBuilder />);
+
+    fireEvent.click(screen.getByTestId('save-button'));
+    await waitFor(() => expect(screen.getByText('保存模型配置')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('配置名称 *'), { target: { value: 'TestConfig' } });
+    const saveButtons = screen.getAllByText('保存');
+    fireEvent.click(saveButtons[saveButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(modelBuilderApi.createConfig).toHaveBeenCalledOnce();
+    });
+
+    const callArg = vi.mocked(modelBuilderApi.createConfig).mock.calls[0][0];
+    expect(callArg.architecture_json.nodes[0].data.parameters).toEqual({ inc: 99 });
+    expect(mlModuleApi.getModule).not.toHaveBeenCalled();
+  });
+
+  it('保存时空 parameters 且 schema 无 default 时保持为空', async () => {
+    useModelBuilderStore.setState({
+      nodes: [
+        { id: 'n1', type: 'module', position: { x: 0, y: 0 }, data: { moduleType: 'Conv2d', moduleName: 'Conv2d', parameters: {}, section: 'backbone' } },
+      ] as unknown as import('@/types/mlModule').RFNode[],
+      edges: [],
+      selectedNodeId: null,
+      history: [],
+      historyIndex: -1,
+      moduleSchemas: {},
+      moduleSchemaLoading: {},
+      moduleSchemaError: {},
+      updateNodeInternalsRef: null,
+      mode: 'architecture',
+    });
+    vi.mocked(mlModuleApi.getModule).mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          type: 'Conv2d',
+          display_name: '卷积层',
+          category: 'atomic',
+          is_composite: false,
+          proxy_inputs: [],
+          proxy_outputs: [],
+          params_schema: [{ name: 'in_channels', type: 'int' }],
+          input_ports_dynamic: false,
+        },
+      },
+    } as unknown as Awaited<ReturnType<typeof mlModuleApi.getModule>>);
+    vi.mocked(modelBuilderApi.createConfig).mockResolvedValue({
+      data: { success: true, data: { id: 1 } },
+    } as unknown as Awaited<ReturnType<typeof modelBuilderApi.createConfig>>);
+
+    const ModelBuilder = (await import('./ModelBuilder')).default;
+    render(<ModelBuilder />);
+
+    fireEvent.click(screen.getByTestId('save-button'));
+    await waitFor(() => expect(screen.getByText('保存模型配置')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('配置名称 *'), { target: { value: 'TestConfig' } });
+    const saveButtons = screen.getAllByText('保存');
+    fireEvent.click(saveButtons[saveButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(modelBuilderApi.createConfig).toHaveBeenCalledOnce();
+    });
+
+    const callArg = vi.mocked(modelBuilderApi.createConfig).mock.calls[0][0];
+    expect(callArg.architecture_json.nodes[0].data.parameters).toEqual({});
+  });
+
+  it('fetchSchema 失败时保存不静默落库', async () => {
+    useModelBuilderStore.setState({
+      nodes: [
+        { id: 'n1', type: 'module', position: { x: 0, y: 0 }, data: { moduleType: 'PMSFA', moduleName: 'PMSFA', parameters: {}, section: 'backbone' } },
+      ] as unknown as import('@/types/mlModule').RFNode[],
+      edges: [],
+      selectedNodeId: null,
+      history: [],
+      historyIndex: -1,
+      moduleSchemas: {},
+      moduleSchemaLoading: {},
+      moduleSchemaError: {},
+      updateNodeInternalsRef: null,
+      mode: 'architecture',
+    });
+    vi.mocked(mlModuleApi.getModule).mockRejectedValue(new Error('network error'));
+
+    const ModelBuilder = (await import('./ModelBuilder')).default;
+    render(<ModelBuilder />);
+
+    fireEvent.click(screen.getByTestId('save-button'));
+    await waitFor(() => expect(screen.getByText('保存模型配置')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('配置名称 *'), { target: { value: 'TestConfig' } });
+    const saveButtons = screen.getAllByText('保存');
+    fireEvent.click(saveButtons[saveButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: '保存失败',
+          variant: 'destructive',
+        })
+      );
+    });
+    expect(modelBuilderApi.createConfig).not.toHaveBeenCalled();
   });
 });

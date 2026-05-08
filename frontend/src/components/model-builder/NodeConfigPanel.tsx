@@ -101,7 +101,7 @@ function PortConfigForm({
   );
 }
 
-function extractDefaults(paramsSchema: ParamSchema[]): Record<string, unknown> {
+export function extractDefaults(paramsSchema: ParamSchema[]): Record<string, unknown> {
   const d: Record<string, unknown> = {};
   for (const p of paramsSchema) {
     if (p.default !== undefined) d[p.name] = p.default;
