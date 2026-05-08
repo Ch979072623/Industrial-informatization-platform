@@ -133,3 +133,8 @@ backend/app/ml/runtime/configs/**
 tmp/
 temp/
 *.tmp
+
+# Training artifacts (P5-S3-T2)
+backend/runs/
+backend/scripts/_smoke_*.yaml
+backend/scripts/_smoke_*.log
