@@ -15,6 +15,17 @@ class YamlGeneratorError(Exception):
     pass
 
 
+# 模块名称映射: DB 注册名 → ultralytics yaml 名
+MODULE_NAME_ALIASES = {
+    "Upsample": "nn.Upsample",
+}
+
+
+def _resolve_module_name(db_name: str) -> str:
+    """将 DB 模块名映射为 ultralytics YAML 中可 eval 的模块名。"""
+    return MODULE_NAME_ALIASES.get(db_name, db_name)
+
+
 def _topological_sort(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> List[str]:
     """
     对节点进行拓扑排序；入度相同时按 y 坐标升序打破平级。
@@ -207,7 +218,12 @@ def architecture_to_yaml(
         args = _extract_args(data, params_schema)
 
         from_val = _derive_from(nid, topo_order, incoming)
-        line = f"  - [{from_val}, {repeats}, {module_type}, {args}]"
+        yaml_module_name = _resolve_module_name(module_type)
+        # 对 nn.Upsample 补 size=None 占位，使 args 对齐 ultralytics 官方 YAML：
+        #   [None, scale_factor, mode] 对应 (size=None, scale_factor=..., mode=...)
+        if yaml_module_name == "nn.Upsample" and (not args or args[0] is not None):
+            args = [None, *args]
+        line = f"  - [{from_val}, {repeats}, {yaml_module_name}, {args}]"
 
         if section == "backbone":
             backbone_lines.append(line)
